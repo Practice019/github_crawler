@@ -1,0 +1,25 @@
+{
+  "name": "github-trending",
+  "version": "1.0.0",
+  "description": "GitHub Trending - 自动获取并展示 GitHub 热门开源项目",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js"
+  },
+  "keywords": [
+    "github",
+    "trending",
+    "open-source"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.16.0",
+    "cheerio": "^1.2.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "node-cron": "^4.2.1"
+  }
+}
