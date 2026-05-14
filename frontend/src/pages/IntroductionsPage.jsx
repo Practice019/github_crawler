@@ -13,6 +13,7 @@ function IntroductionsPage() {
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all'); // all 或标签 id
   const [favoriteFilter, setFavoriteFilter] = useState(false); // 是否只显示收藏
+  const [searchQuery, setSearchQuery] = useState(''); // 搜索关键词
   const [showTagManager, setShowTagManager] = useState(false);
   const [newTagLabel, setNewTagLabel] = useState('');
   const [editingTagId, setEditingTagId] = useState(null);
@@ -207,6 +208,15 @@ function IntroductionsPage() {
   };
 
   const filteredProjects = projects.filter(project => {
+    // 搜索筛选
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      const matchName = project.name?.toLowerCase().includes(query);
+      const matchOverview = project.overview?.toLowerCase().includes(query);
+      const matchSummary = project.summary?.toLowerCase().includes(query);
+      if (!matchName && !matchOverview && !matchSummary) return false;
+    }
+
     // 标签筛选
     if (statusFilter !== 'all') {
       const status = getProjectStatus(project.id);
@@ -276,6 +286,21 @@ function IntroductionsPage() {
             🏷️ 管理标签
           </button>
         </div>
+      </div>
+
+      <div className="search-section">
+        <input
+          type="text"
+          placeholder="搜索项目名称或描述..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="search-input"
+        />
+        {searchQuery && (
+          <button className="clear-search-btn" onClick={() => setSearchQuery('')}>
+            ✕
+          </button>
+        )}
       </div>
 
       {showTagManager && (
