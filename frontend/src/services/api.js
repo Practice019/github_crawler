@@ -16,7 +16,12 @@ export const getTrendingByLanguage = async (language, params = {}) => {
 };
 
 export const getTrendingWithIntros = async (params = {}) => {
-  const response = await api.get('/trending', { params });
+  // 移除空的 language 参数
+  const cleanParams = { ...params };
+  if (!cleanParams.language) {
+    delete cleanParams.language;
+  }
+  const response = await api.get('/github/trending', { params: cleanParams });
   return response.data;
 };
 
@@ -32,6 +37,17 @@ export const analyzeRepo = async (owner, repo) => {
 
 export const getBatchIntros = async (repos) => {
   const response = await api.post('/intros/batch', { repos });
+  return response.data;
+};
+
+// 项目介绍相关接口
+export const getIntroductions = async () => {
+  const response = await api.get('/introductions');
+  return response.data;
+};
+
+export const getIntroductionDetail = async (id) => {
+  const response = await api.get(`/introductions/${id}`);
   return response.data;
 };
 

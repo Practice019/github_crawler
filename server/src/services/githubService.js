@@ -194,12 +194,12 @@ async function fetchRepoDetails(author, name) {
   }
 }
 
-async function fetchAllTrending() {
+async function fetchAllTrending(since = 'daily') {
   const results = {};
 
   for (const lang of LANGUAGES) {
-    console.log(`Fetching trending for: ${lang}`);
-    results[lang] = await fetchTrendingRepos(lang);
+    console.log(`Fetching trending for: ${lang} (${since})`);
+    results[lang] = await fetchTrendingRepos(lang, since);
     await new Promise(resolve => setTimeout(resolve, 1500));
   }
 

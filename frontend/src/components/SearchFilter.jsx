@@ -15,9 +15,10 @@ const POPULAR_LANGUAGES = [
 ];
 
 const TIME_RANGES = [
-  { value: 'daily', label: 'Today' },
-  { value: 'weekly', label: 'This Week' },
-  { value: 'monthly', label: 'This Month' }
+  { value: 'all', label: 'all' },
+  { value: 'daily', label: 'daily' },
+  { value: 'weekly', label: 'weekly' },
+  { value: 'monthly', label: 'monthly' }
 ];
 
 function SearchFilter({

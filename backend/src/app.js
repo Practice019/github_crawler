@@ -4,6 +4,7 @@ const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const config = require('./config');
 const githubRoutes = require('./routes/github');
+const introductionsRoutes = require('./routes/introductions');
 const { errorHandler } = require('./utils/errorHandler');
 
 const app = express();
@@ -21,6 +22,7 @@ const limiter = rateLimit({
 app.use('/api', limiter);
 
 app.use('/api/github', githubRoutes);
+app.use('/api/introductions', introductionsRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

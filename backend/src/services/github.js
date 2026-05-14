@@ -84,19 +84,29 @@ async function getTrendingProjects(options = {}) {
     query += ` language:${language}`;
   }
 
+  // 动态计算日期范围
+  const now = new Date();
   let dateRange;
   switch (since) {
     case 'daily':
-      dateRange = '>2026-05-03';
+      const yesterday = new Date(now);
+      yesterday.setDate(yesterday.getDate() - 1);
+      dateRange = `>${yesterday.toISOString().split('T')[0]}`;
       break;
     case 'weekly':
-      dateRange = '>2026-04-27';
+      const lastWeek = new Date(now);
+      lastWeek.setDate(lastWeek.getDate() - 7);
+      dateRange = `>${lastWeek.toISOString().split('T')[0]}`;
       break;
     case 'monthly':
-      dateRange = '>2026-04-04';
+      const lastMonth = new Date(now);
+      lastMonth.setMonth(lastMonth.getMonth() - 1);
+      dateRange = `>${lastMonth.toISOString().split('T')[0]}`;
       break;
     default:
-      dateRange = '>2026-04-27';
+      const defaultWeek = new Date(now);
+      defaultWeek.setDate(defaultWeek.getDate() - 7);
+      dateRange = `>${defaultWeek.toISOString().split('T')[0]}`;
   }
   query += ` pushed:${dateRange}`;
 

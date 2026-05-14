@@ -457,7 +457,26 @@ async function downloadBatchReadmes(repos, skipIfExists = false) {
   return results;
 }
 
+/**
+ * 生成报告（主入口函数）
+ * @param {String} author - 作者名
+ * @param {String} name - 项目名
+ * @param {Boolean} skipIfExists - 如果文件已存在是否跳过
+ * @returns {Object} - 包含文件路径和是否跳过的信息
+ */
+async function generateReport(author, name, skipIfExists = false) {
+  const repo = { author, name };
+  const result = await downloadAndSaveReadme(repo, skipIfExists);
+
+  return {
+    repo: `${author}/${name}`,
+    filePath: result.filePath,
+    skipped: result.skipped
+  };
+}
+
 module.exports = {
+  generateReport,
   generateProjectReport,
   saveReport,
   generateAndSaveReport,

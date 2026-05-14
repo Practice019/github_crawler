@@ -10,10 +10,11 @@ function HomePage() {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [language, setLanguage] = useState('');
-  const [since, setSince] = useState('weekly');
+  const [since, setSince] = useState('all');
   const [sortBy, setSortBy] = useState('stars');
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0 });
+  const [updating, setUpdating] = useState(false);
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -136,6 +137,30 @@ function HomePage() {
     }
   };
 
+  const handleUpdateCache = async () => {
+    if (updating) return;
+
+    try {
+      setUpdating(true);
+      const response = await fetch('/api/scheduler/fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert('缓存更新已启动，请稍后刷新页面查看最新数据');
+      } else {
+        alert(`更新失败：${data.error}`);
+      }
+    } catch (err) {
+      alert(`更新失败：${err.message}`);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   return (
     <div className="home-page">
       <SearchFilter
@@ -172,6 +197,14 @@ function HomePage() {
         </div>
 
         <div className="batch-actions">
+          <button
+            className="update-cache-btn"
+            onClick={handleUpdateCache}
+            disabled={updating}
+            title="手动更新热门项目缓存"
+          >
+            {updating ? '更新中...' : '🔄 更新缓存'}
+          </button>
           <button
             className="download-all-btn"
             onClick={handleDownloadAll}

@@ -5,10 +5,16 @@ import axios from 'axios';
 function ProjectCard({ project }) {
   const [generating, setGenerating] = useState(false);
   const [reportStatus, setReportStatus] = useState(null);
+  const [imgError, setImgError] = useState(false);
 
   const intro = project.introduction;
   const highlights = intro ? getHighlightsList(intro) : [];
   const techStackSummary = intro ? getTechStackSummary(intro) : project.language || 'Unknown';
+
+  // 获取首字母作为默认头像
+  const getInitials = (name) => {
+    return name ? name.charAt(0).toUpperCase() : '?';
+  };
 
   const handleGenerateReport = async (project) => {
     try {
@@ -40,12 +46,19 @@ function ProjectCard({ project }) {
   return (
     <article className="project-card">
       <div className="project-header">
-        <img
-          src={project.ownerAvatar || `https://github.com/${project.owner}.png`}
-          alt={`${project.owner} avatar`}
-          className="avatar"
-          loading="lazy"
-        />
+        {!imgError ? (
+          <img
+            src={project.ownerAvatar || project.avatar || `https://github.com/${project.owner || project.author}.png`}
+            alt={`${project.owner || project.author} avatar`}
+            className="avatar"
+            loading="lazy"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <div className="avatar avatar-fallback">
+            {getInitials(project.owner || project.author)}
+          </div>
+        )}
         <div className="project-info">
           <h3>
             <a href={project.url} target="_blank" rel="noopener noreferrer">
@@ -102,7 +115,6 @@ function ProjectCard({ project }) {
           >
             📄 生成报告
           </button>
-          <span className="last-updated">Updated {getLastUpdatedDate(project.updatedAt)}</span>
         </div>
       </div>
     </article>

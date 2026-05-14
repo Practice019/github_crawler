@@ -3,6 +3,9 @@ const path = require('path');
 const cors = require('cors');
 const fs = require('fs');
 const apiRoutes = require('./src/routes/api');
+const introductionsRoutes = require('./src/routes/introductions');
+const docGeneratorRoutes = require('./src/routes/docGenerator');
+const projectStatusRoutes = require('./src/routes/projectStatus');
 const scheduler = require('./src/services/scheduler');
 
 // 手动加载 .env 文件
@@ -43,6 +46,9 @@ app.get('/api/test', (req, res) => {
 });
 
 app.use('/api', apiRoutes);
+app.use('/api/introductions', introductionsRoutes);
+app.use('/api/doc-generator', docGeneratorRoutes);
+app.use('/api/project-status', projectStatusRoutes);
 
 // Fallback route for SPA - handle all other routes
 app.use((req, res, next) => {

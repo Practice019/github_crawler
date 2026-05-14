@@ -82,138 +82,62 @@ class SimpleDocumentGenerator:
             raise ValueError("请在 .env 文件中设置 OPENAI_API_KEY")
 
         api_base = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1")
-        self.model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        self.model = os.getenv("OPENAI_MODEL", "claude-haiku-4-5-20251001")
 
-        self.client = AsyncOpenAI(api_key=api_key, base_url=api_base)
+        # 设置更长的超时时间，并禁用代理
+        import httpx
+        self.client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=api_base,
+            timeout=httpx.Timeout(120.0, connect=10.0),  # 总超时120秒，连接超时10秒
+            max_retries=2,  # 最多重试2次
+            http_client=httpx.AsyncClient(proxy=None)  # 禁用代理
+        )
 
         # 文档生成提示词
-        self.system_prompt = """你是B站爆款短视频文案专家，专门为技术类开源项目创作视频脚本。
+        self.system_prompt = """# 角色
+你是专业的产品介绍撰稿人，擅长撰写高质量的项目介绍文章。
 
-## 任务
-将GitHub开源项目README转化为B站视频脚本，完整讲清楚项目，然后按50字分段输出。
+# 任务
+阅读项目README文件，撰写一篇专业且易懂的中文项目介绍文章。
+核心目标：清晰阐述项目是什么、解决什么问题、具备什么能力。
 
-## 目标受众
-- 技术爱好者/学生（"GitHub上最火的XX工具"）
-- 泛科技用户（"3分钟看懂这个神器"）
+# 输出结构
+## 项目概述
+- 项目定位和核心价值
+- 解决的主要问题
+- 目标应用场景
 
-## 内容结构要求（必须包含以下所有部分）
+## 核心功能
+- 列出主要功能模块
+- 说明每个功能的作用和价值
+- 功能之间的关联关系
 
-### 1. 开场痛点（对话式）
-- 抛出目标用户的真实痛点
-- 引发共鸣，让用户产生"说的就是我"的感觉
-- 例："你是不是也遇到过XX问题？"
+# 写作原则
+1. 专业性：保持文章质量，使用准确的表述
+2. 可读性：面向非技术背景读者，避免过度技术化
+3. 完整性：全面介绍项目能力，不遗漏重要功能
+4. 聚焦性：重点说明"是什么"和"能做什么"
+5. 简洁性：控制篇幅在800-1200字
 
-### 2. 项目核心定位（对话式）
-- 一句话说清楚这个项目是什么
-- 必须包含：项目名称 + GitHub Star数（如果有）
-- 例："今天给大家介绍GitHub上10万+Star的神器Dify，一个开源的LLM应用开发平台"
+# 严格禁止
+- 代码示例和命令行指令
+- 安装部署步骤
+- 配置说明和参数设置
+- 开发环境搭建
+- 技术架构细节（框架、库、API名称）
+- 系统要求和硬件配置
+- 文件目录结构
+- 故障排查和问题解决
+- 技术优势和平台支持说明
+- 适用对象和用户群体分析
+- 项目亮点和创新点总结
 
-### 3. 核心价值（陈述式）
-- 这个项目解决了什么核心问题
-- 相比传统方案有什么优势
-- 例："让你不用写代码就能搭建AI应用，5分钟就能上手"
+# 允许保留
+- 功能列表和说明
+- 应用场景描述（融入项目概述中）
 
-### 4. 核心功能讲解（陈述式，严格3-4个功能）
-**重要**：只讲3-4个最核心的功能，不要超过4个。
-每个功能必须包含：
-- 功能是什么
-- 解决什么场景问题
-- 怎么用（简单描述）
-- 例："第一个核心功能是可视化工作流编排。你可以像搭积木一样拖拽组件，快速构建AI应用，不需要写一行代码。比如你想做个客服机器人，直接拖个对话节点、接个知识库、连上大模型，几分钟就搞定。"
-
-### 5. 技术亮点/数据背书（陈述式）
-必须提取并展示：
-- GitHub Star数、Fork数、贡献者数
-- 更新频率（如"月均XX提交"，说明项目活跃）
-- 功能数据（如"支持100+AI模型""10万+用户"）
-- 技术栈信息（主要技术选型）
-- 与同类项目对比（如果README中有）
-
-### 6. 使用门槛/部署方式（陈述式）
-- 上手难度（"5分钟上手""无需编程基础"）
-- 部署方式（"Docker一键部署""云端版本直接用"）
-- 文档支持（"中文文档完善"）
-
-### 7. 行动号召（对话式）
-必须包含三个引导：
-- 引导三连："觉得有用的话，点赞收藏加关注"
-- 引导GitHub："项目链接已经放在简介里了"
-- 引导评论："评论区说说你用过哪些类似工具"
-
-## 文案要求
-1. **完整性**：把项目讲清楚，不要遗漏关键信息
-2. **场景化**：每个功能都要结合使用场景讲解
-3. **数据驱动**：从README中提取所有可用数据
-4. **对话式密度**：开场+核心定位+结尾用对话式，其他部分用陈述式
-5. **口语化**：适合口播，避免书面语
-6. **价值导向**：不只讲功能，要讲这个功能解决什么问题
-
-## 输出格式要求（严格遵守）
-**关键规则**：写完完整内容后，按每50字用一个换行符（\\n）自动分段。
-
-### 分段规则（必须严格执行）
-1. **字数控制**：每段严格控制在45-55字之间
-2. **语义完整**：不要在句子中间断开，保持语义完整
-3. **段落分隔**：段与段之间只用一个换行符（\\n）分隔，不要用两个
-4. **禁止多余换行**：不要出现连续的空行
-5. **无标注**：不要输出【镜头X】【画面】等任何标注，只输出文案内容
-6. **文件结尾**：最后一段后只加一个换行符
-
-### 格式检查清单
-- [ ] 每段字数在45-55字之间
-- [ ] 段落间只有一个\\n，没有空行
-- [ ] 没有连续的\\n\\n
-- [ ] 没有任何标注符号
-- [ ] 文件开头无空行
-- [ ] 文件结尾只有一个\\n
-
-## 输出示例
-你是不是也遇到过搭建AI应用太复杂的问题？想做个原型验证，光配环境就要折腾好几天？
-
-
-今天给大家介绍GitHub上10万+Star的神器Dify，一个开源的LLM应用开发平台。
-
-
-这个项目最大的价值就是让你不用写代码就能搭建AI应用，可视化拖拽，5分钟就能上手。
-
-
-第一个核心功能是可视化工作流编排。你可以像搭积木一样拖拽组件，快速构建AI应用。
-
-
-比如你想做个客服机器人，直接拖个对话节点、接个知识库、连上大模型，几分钟就搞定。
-
-
-第二个核心功能是RAG知识库管理。支持多种文档格式，自动向量化，让AI能理解你的业务数据。
-
-
-你可以上传PDF、Word、网页内容，系统自动处理，AI就能基于这些内容回答问题。
-
-
-第三个核心功能是Agent智能体构建。内置工具调用能力，让AI能主动执行任务，不只是聊天。
-
-
-技术亮点方面，这个项目GitHub上已经有10万+Star，5000+贡献者，月均300+提交。
-
-
-支持100多种AI模型接入，包括GPT、Claude、国产大模型等，还有完整的可观测性功能。
-
-
-部署方面也很简单，Docker一键部署，或者直接用云端版本，中文文档也很完善。
-
-
-觉得有用的话，点赞收藏加关注。项目链接已经放在简介里了，评论区说说你用过哪些类似工具。
-
-## 注意事项
-- **总字数**：严格控制在600-800字
-- **功能数量**：只讲3-4个核心功能，不要超过4个
-- **分段格式**：先写完整内容，再按45-55字分段
-- **段落分隔**：每段之间必须且只能用两个换行符（\\n\\n）
-- **语义完整**：保持每段语义完整，不要在句子中间断开
-- **场景化**：功能讲解必须结合使用场景，不要只列功能名称
-- **无多余换行**：不要出现3个或更多连续换行符
-- **文件格式**：开头无空行，结尾只有一个换行符
-
-现在开始生成脚本。
+现在开始生成项目介绍文章。
 """
 
     @retry(max_attempts=3, delay=2)
@@ -226,11 +150,11 @@ class SimpleDocumentGenerator:
         project_folder.mkdir(parents=True, exist_ok=True)
 
         # 定义输出文件路径
-        script_file = project_folder / "script.md"
-        github_link_file = project_folder / "github_link.md"
+        intro_file = project_folder / "项目介绍.md"
+        github_link_file = project_folder / "项目链接.md"
 
         # 检查输出文件是否已存在
-        if script_file.exists():
+        if intro_file.exists():
             logger.info(f"跳过已存在的项目: {project_name}")
             return {
                 "file": file_path.name,
@@ -253,11 +177,14 @@ class SimpleDocumentGenerator:
                 github_url = f"项目名称格式异常: {project_name}"
 
             # 限制源文件长度（避免超过 token 限制）
-            if len(source_content) > 10000:
-                source_content = source_content[:10000] + "\n\n[内容过长，已截断]"
+            # 进一步减少长度，避免 502 错误
+            if len(source_content) > 6000:
+                source_content = source_content[:6000] + "\n\n[内容过长，已截断]"
 
             # 调用 OpenAI API 生成文档
             user_prompt = f"项目名称: {project_name}\n\n原始文档内容:\n{source_content}"
+
+            logger.info(f"准备请求 API，内容长度: {len(user_prompt)} 字符")
 
             response = await self.client.chat.completions.create(
                 model=self.model,
@@ -266,8 +193,11 @@ class SimpleDocumentGenerator:
                     {"role": "user", "content": user_prompt}
                 ],
                 temperature=0.7,
-                max_tokens=2000
+                max_tokens=2500,  # 800-1200字约需2000-2500 tokens
+                stream=False  # 关闭流式输出
             )
+
+            logger.info(f"API 请求成功")
 
             # 处理不同的响应格式
             if hasattr(response, 'choices'):
@@ -280,8 +210,8 @@ class SimpleDocumentGenerator:
             else:
                 result = str(response)
 
-            # 保存视频脚本
-            with open(script_file, 'w', encoding='utf-8') as f:
+            # 保存项目介绍文档
+            with open(intro_file, 'w', encoding='utf-8') as f:
                 f.write(result)
 
             # 保存GitHub链接
@@ -299,11 +229,20 @@ class SimpleDocumentGenerator:
             }
 
         except Exception as e:
-            logger.error(f"处理文件失败 {file_path.name}: {str(e)}")
+            error_type = type(e).__name__
+            error_msg = str(e)
+            logger.error(f"处理文件失败 {file_path.name}: [{error_type}] {error_msg}")
+
+            # 如果是 API 错误，记录更多信息
+            if hasattr(e, 'response'):
+                logger.error(f"API 响应状态: {getattr(e.response, 'status_code', 'unknown')}")
+                logger.error(f"API 响应内容: {getattr(e.response, 'text', 'unknown')}")
+
             return {
                 "file": file_path.name,
                 "status": "failed",
-                "message": str(e)
+                "error_type": error_type,
+                "message": error_msg
             }
 
     async def batch_process(self, max_concurrent: int = 5, limit: int = None) -> List[Dict]:
@@ -364,6 +303,28 @@ class SimpleDocumentGenerator:
 
 async def main():
     """主函数"""
+    import argparse
+
+    # 解析命令行参数
+    parser = argparse.ArgumentParser(
+        description='批量文档生成系统 - 将 GitHub README 转化为 B 站视频脚本',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+使用示例:
+  python main.py                    # 处理所有文件
+  python main.py --test             # 测试模式：只处理第一个文件
+  python main.py --limit 5          # 只处理前 5 个文件
+  python main.py --concurrent 3     # 设置并发数为 3
+        """
+    )
+    parser.add_argument('--test', action='store_true',
+                        help='测试模式：只处理第一个文件')
+    parser.add_argument('--limit', type=int, default=None,
+                        help='限制处理文件数量（例如：--limit 5）')
+    parser.add_argument('--concurrent', type=int, default=5,
+                        help='并发数（默认：5，建议 3-5）')
+    args = parser.parse_args()
+
     # 配置路径
     source_dir = "D:/test/31/reports"
     output_dir = "D:/test/31/introductions"
@@ -371,9 +332,20 @@ async def main():
     # 创建生成器
     generator = SimpleDocumentGenerator(source_dir, output_dir)
 
-    # 批量处理所有文件
-    logger.info("开始批量处理所有文档...")
-    results = await generator.batch_process(max_concurrent=5, limit=None)
+    # 确定处理数量
+    if args.test:
+        limit = 1
+        logger.info("🧪 测试模式：只处理第一个文件")
+    elif args.limit:
+        limit = args.limit
+        logger.info(f"📊 限制模式：处理前 {limit} 个文件")
+    else:
+        limit = None
+        logger.info("🚀 完整模式：处理所有文件")
+
+    # 批量处理文件
+    logger.info(f"并发数：{args.concurrent}")
+    results = await generator.batch_process(max_concurrent=args.concurrent, limit=limit)
 
     # 生成报告
     generator.generate_report(results)

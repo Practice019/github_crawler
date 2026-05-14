@@ -24,7 +24,7 @@ class SchedulerService {
     });
 
     console.log('Scheduler started. Next fetch at 6-hour intervals.');
-    this.fetchAllData();
+    console.log('⚠️  Auto-fetch disabled. Use manual update button to fetch data.');
   }
 
   async fetchAllData() {
@@ -37,20 +37,26 @@ class SchedulerService {
     this.lastRun = new Date().toISOString();
 
     try {
-      const results = await githubService.fetchAllTrending();
+      // 获取所有三种时间范围的数据
+      const timeRanges = ['daily', 'weekly', 'monthly'];
 
-      for (const [lang, repos] of Object.entries(results)) {
-        if (repos.length > 0) {
-          cache.set(`trending:${lang}`, repos);
-          console.log(`Cached ${repos.length} repos for ${lang}`);
+      for (const since of timeRanges) {
+        console.log(`Fetching ${since} trending data...`);
+        const results = await githubService.fetchAllTrending(since);
+
+        for (const [lang, repos] of Object.entries(results)) {
+          if (repos.length > 0) {
+            cache.set(`trending:${lang}:${since}`, repos);
+            console.log(`Cached ${repos.length} repos for ${lang} (${since})`);
+          }
         }
-      }
 
-      cache.set('trending:meta', {
-        lastUpdated: this.lastRun,
-        languages: Object.keys(results).filter(l => results[l].length > 0),
-        totalCount: Object.values(results).reduce((sum, r) => sum + r.length, 0),
-      });
+        cache.set(`trending:meta:${since}`, {
+          lastUpdated: this.lastRun,
+          languages: Object.keys(results).filter(l => results[l].length > 0),
+          totalCount: Object.values(results).reduce((sum, r) => sum + r.length, 0),
+        });
+      }
 
       this.lastRunStatus = 'success';
     } catch (error) {
