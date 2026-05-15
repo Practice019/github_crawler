@@ -1,7 +1,7 @@
 const axios = require('axios');
 const GITHUB_API = 'https://api.github.com';
 const GITHUB_TRENDING = 'https://github.com/trending';
-const LANGUAGES = ['javascript', 'typescript', 'python', 'go', 'rust', 'java', 'cpp', 'vue'];
+const LANGUAGES = ['', 'javascript', 'typescript', 'python', 'go', 'rust', 'java', 'cpp', 'vue'];
 
 const sinceDays = {
   daily: 1,
@@ -198,8 +198,10 @@ async function fetchAllTrending(since = 'daily') {
   const results = {};
 
   for (const lang of LANGUAGES) {
-    console.log(`Fetching trending for: ${lang} (${since})`);
-    results[lang] = await fetchTrendingRepos(lang, since);
+    const langName = lang || 'all';
+    const cacheKey = lang || 'all'; // 空字符串存储为 'all'
+    console.log(`Fetching trending for: ${langName} (${since})`);
+    results[cacheKey] = await fetchTrendingRepos(lang, since);
     await new Promise(resolve => setTimeout(resolve, 1500));
   }
 

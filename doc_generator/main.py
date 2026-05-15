@@ -176,11 +176,6 @@ class SimpleDocumentGenerator:
             else:
                 github_url = f"项目名称格式异常: {project_name}"
 
-            # 限制源文件长度（避免超过 token 限制）
-            # 进一步减少长度，避免 502 错误
-            if len(source_content) > 6000:
-                source_content = source_content[:6000] + "\n\n[内容过长，已截断]"
-
             # 调用 OpenAI API 生成文档
             user_prompt = f"项目名称: {project_name}\n\n原始文档内容:\n{source_content}"
 

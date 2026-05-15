@@ -8,6 +8,34 @@ class SchedulerService {
     this.isRunning = false;
     this.lastRun = null;
     this.lastRunStatus = null;
+    this.logListeners = []; // SSE 日志监听器
+  }
+
+  // 添加日志监听器
+  addLogListener(listener) {
+    this.logListeners.push(listener);
+  }
+
+  // 移除日志监听器
+  removeLogListener(listener) {
+    this.logListeners = this.logListeners.filter(l => l !== listener);
+  }
+
+  // 发送日志到所有监听器
+  sendLog(type, message) {
+    const log = {
+      type,
+      message,
+      timestamp: new Date().toISOString()
+    };
+    console.log(`[${type}] ${message}`);
+    this.logListeners.forEach(listener => {
+      try {
+        listener(log);
+      } catch (err) {
+        console.error('Failed to send log to listener:', err);
+      }
+    });
   }
 
   start() {
@@ -29,25 +57,26 @@ class SchedulerService {
 
   async fetchAllData() {
     if (this.isRunning) {
-      console.log('Fetch already in progress, skipping...');
+      this.sendLog('warning', 'Fetch already in progress, skipping...');
       return;
     }
 
     this.isRunning = true;
     this.lastRun = new Date().toISOString();
+    this.sendLog('info', '开始更新缓存...');
 
     try {
       // 获取所有三种时间范围的数据
       const timeRanges = ['daily', 'weekly', 'monthly'];
 
       for (const since of timeRanges) {
-        console.log(`Fetching ${since} trending data...`);
+        this.sendLog('info', `正在获取 ${since} 数据...`);
         const results = await githubService.fetchAllTrending(since);
 
         for (const [lang, repos] of Object.entries(results)) {
           if (repos.length > 0) {
             cache.set(`trending:${lang}:${since}`, repos);
-            console.log(`Cached ${repos.length} repos for ${lang} (${since})`);
+            this.sendLog('success', `✅ 已缓存 ${repos.length} 个项目 (${lang} - ${since})`);
           }
         }
 
@@ -59,8 +88,9 @@ class SchedulerService {
       }
 
       this.lastRunStatus = 'success';
+      this.sendLog('success', '✅ 缓存更新完成！');
     } catch (error) {
-      console.error('Scheduled fetch failed:', error.message);
+      this.sendLog('error', `❌ 缓存更新失败: ${error.message}`);
       this.lastRunStatus = 'failed';
     } finally {
       this.isRunning = false;

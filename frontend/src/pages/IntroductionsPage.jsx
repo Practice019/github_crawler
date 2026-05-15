@@ -432,19 +432,32 @@ function IntroductionsPage() {
                   <p className="intro-card-overview">{project.overview || project.summary}</p>
                 </div>
                 <div className="intro-card-footer">
-                  <select
-                    className="status-select"
-                    value={currentTag.id}
-                    onChange={(e) => handleStatusChange(project.id, e.target.value, e)}
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ borderColor: currentTag.color }}
-                  >
-                    {tags.map(tag => (
-                      <option key={tag.id} value={tag.id}>
-                        {tag.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="footer-left">
+                    <select
+                      className="status-select"
+                      value={currentTag.id}
+                      onChange={(e) => handleStatusChange(project.id, e.target.value, e)}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ borderColor: currentTag.color }}
+                    >
+                      {tags.map(tag => (
+                        <option key={tag.id} value={tag.id}>
+                          {tag.label}
+                        </option>
+                      ))}
+                    </select>
+                    {project.createdAt && (
+                      <span className="created-time">
+                        {new Date(project.createdAt).toLocaleString('zh-CN', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                    )}
+                  </div>
                   <span className="read-more">查看详情 →</span>
                 </div>
               </article>

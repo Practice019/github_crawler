@@ -10,6 +10,7 @@ function DocGeneratorPage() {
   const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0 });
   const [importUrl, setImportUrl] = useState('');
   const [importing, setImporting] = useState(false);
+  const [updateCacheBeforeStart, setUpdateCacheBeforeStart] = useState(false);
   const logsEndRef = useRef(null);
   const eventSourceRef = useRef(null);
 
@@ -193,6 +194,72 @@ function DocGeneratorPage() {
       setStarting(true);
       setLogs([]);
 
+      // 第零步：更新缓存（如果勾选）
+      if (updateCacheBeforeStart) {
+        addLog('info', '========== 第零步：更新热门项目缓存 ==========');
+
+        try {
+          let cacheUpdateCompleted = false;
+          let eventSource = null;
+
+          // 先建立 SSE 连接并设置监听器
+          await new Promise((resolve, reject) => {
+            eventSource = new EventSource('/api/scheduler/logs');
+
+            // 立即设置消息监听器（在 onopen 之前）
+            eventSource.onmessage = (event) => {
+              const log = JSON.parse(event.data);
+              addLog(log.type, log.message);
+
+              // 检测完成信号
+              if (log.message.includes('缓存更新完成') || log.message.includes('缓存更新失败')) {
+                cacheUpdateCompleted = true;
+                eventSource.close();
+              }
+            };
+
+            eventSource.onopen = () => {
+              addLog('info', 'SSE 连接已建立');
+              resolve();
+            };
+
+            eventSource.onerror = (error) => {
+              console.error('SSE 连接错误:', error);
+              reject(error);
+            };
+
+            // 超时保护
+            setTimeout(() => resolve(), 1000);
+          });
+
+          // 启动缓存更新
+          const cacheResponse = await fetch('/api/scheduler/fetch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+
+          const cacheData = await cacheResponse.json();
+          if (!cacheData.success) {
+            addLog('error', `❌ 启动失败: ${cacheData.error}`);
+            eventSource.close();
+          } else {
+            // 等待缓存更新完成
+            let timeout = 0;
+            while (!cacheUpdateCompleted && timeout < 120) {
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              timeout++;
+            }
+
+            if (!cacheUpdateCompleted) {
+              addLog('warning', '⚠️ 缓存更新超时');
+              eventSource.close();
+            }
+          }
+        } catch (err) {
+          addLog('error', `❌ 缓存更新失败: ${err.message}`);
+        }
+      }
+
       // 第一步：下载所有 README
       addLog('info', '========== 第一步：下载 README ==========');
       const downloadResult = await downloadAllReadmes();
@@ -335,22 +402,30 @@ function DocGeneratorPage() {
       <div className="page-header">
         <h2>文档生成器</h2>
         <div className="header-actions">
-          <button
-            className="btn btn-success"
-            onClick={handleOneClick}
-            disabled={running || starting || downloading}
-          >
-            {downloading ? `下载中 (${downloadProgress.current}/${downloadProgress.total})` :
-             starting ? '启动中...' :
-             running ? '运行中' :
-             '🚀 一键启动'}
-          </button>
+          <div className="one-click-section">
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                checked={updateCacheBeforeStart}
+                onChange={(e) => setUpdateCacheBeforeStart(e.target.checked)}
+                disabled={running || starting || downloading}
+              />
+              <span>启动前更新缓存</span>
+            </label>
+            <button
+              className="btn btn-success"
+              onClick={handleOneClick}
+              disabled={running || starting || downloading}
+            >
+              🚀 一键启动
+            </button>
+          </div>
           <button
             className="btn btn-primary"
             onClick={handleStart}
             disabled={running || starting || downloading}
           >
-            {starting ? '启动中...' : running ? '运行中' : '▶ 仅生成文档'}
+            ▶ 仅生成文档
           </button>
           <button
             className="btn btn-danger"

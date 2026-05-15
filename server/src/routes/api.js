@@ -10,10 +10,10 @@ router.get('/trending', async (req, res) => {
   try {
     const { since = 'weekly', language = '' } = req.query;
 
-    // 构建缓存键
-    const lang = language || 'javascript'; // 默认语言
+    // 构建缓存键 - 空字符串表示全部语言
+    const lang = language || 'all';
 
-    console.log(`API Request: /api/trending?since=${since}&language=${language}`);
+    console.log(`API Request: /api/trending?since=${since}&language=${language} -> cache key: ${lang}`);
 
     // 如果选择"全部"，合并所有时间范围的数据
     if (since === 'all') {
@@ -87,10 +87,10 @@ router.get('/github/trending', async (req, res) => {
   try {
     const { since = 'weekly', language = '' } = req.query;
 
-    // 构建缓存键
-    const lang = language || 'javascript'; // 默认语言
+    // 构建缓存键 - 空字符串表示全部语言
+    const lang = language || 'all';
 
-    console.log(`API Request: /api/github/trending?since=${since}&language=${language}`);
+    console.log(`API Request: /api/github/trending?since=${since}&language=${language} -> cache key: ${lang}`);
 
     // 如果选择"全部"，合并所有时间范围的数据
     if (since === 'all') {
@@ -228,6 +228,23 @@ router.post('/scheduler/fetch', async (req, res) => {
       error: error.message
     });
   }
+});
+
+// GET /api/scheduler/logs - 获取缓存更新实时日志（SSE）
+router.get('/scheduler/logs', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const listener = (log) => {
+    res.write(`data: ${JSON.stringify(log)}\n\n`);
+  };
+
+  scheduler.addLogListener(listener);
+
+  req.on('close', () => {
+    scheduler.removeLogListener(listener);
+  });
 });
 
 module.exports = router;
