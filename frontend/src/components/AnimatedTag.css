@@ -1,0 +1,75 @@
+.animated-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 2px solid;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  background: transparent;
+}
+
+.animated-tag:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.animated-tag.active {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.tag-label {
+  line-height: 1;
+}
+
+.tag-count {
+  background: rgba(255, 255, 255, 0.3);
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 20px;
+  text-align: center;
+}
+
+.animated-tag.active .tag-count {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.tag-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: 4px;
+}
+
+.tag-action-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.tag-action-btn:hover {
+  background: rgba(255, 255, 255, 0.4);
+  transform: scale(1.1);
+}
+
+.animated-tag:not(.active) .tag-action-btn {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.animated-tag:not(.active) .tag-action-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+}

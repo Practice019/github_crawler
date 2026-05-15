@@ -1,0 +1,347 @@
+/* 现代化深色主题样式 - 应用于所有内部页面 */
+
+/* 深色主题 */
+body[data-theme="dark"] {
+  --color-bg: #0a0e27;
+  --color-bg-secondary: rgba(255, 255, 255, 0.05);
+  --color-text: #ffffff;
+  --color-text-secondary: rgba(255, 255, 255, 0.7);
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-link: #667eea;
+  --color-link-hover: #764ba2;
+  --color-accent: #667eea;
+  --color-accent-hover: #764ba2;
+  --color-error: #f85149;
+  --color-error-bg: rgba(248, 81, 73, 0.1);
+  --color-highlight-bg: rgba(102, 126, 234, 0.2);
+  --color-highlight-text: #667eea;
+  --color-tag-bg: rgba(102, 126, 234, 0.15);
+  --color-tag-text: #667eea;
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+}
+
+/* 浅色主题 */
+body[data-theme="light"] {
+  --color-bg: #ffffff;
+  --color-bg-secondary: #f6f8fa;
+  --color-text: #24292f;
+  --color-text-secondary: #57606a;
+  --color-border: #d0d7de;
+  --color-link: #0969da;
+  --color-link-hover: #0550ae;
+  --color-accent: #0969da;
+  --color-accent-hover: #0550ae;
+  --color-error: #d1242f;
+  --color-error-bg: #ffebe9;
+  --color-highlight-bg: #ddf4ff;
+  --color-highlight-text: #0969da;
+  --color-tag-bg: #ddf4ff;
+  --color-tag-text: #0969da;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.15);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.18);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+}
+
+/* 页面背景 */
+body[data-theme="dark"] {
+  background: #0a0e27;
+  color: white;
+}
+
+body[data-theme="light"] {
+  background: #ffffff;
+  color: #24292f;
+}
+
+/* 应用容器 */
+body[data-theme="dark"] .app {
+  background: #0a0e27;
+}
+
+body[data-theme="light"] .app {
+  background: #ffffff;
+}
+
+body[data-theme="dark"] .app-container {
+  background: #0a0e27;
+}
+
+body[data-theme="light"] .app-container {
+  background: #ffffff;
+}
+
+/* 页面头部 */
+body[data-theme="dark"] .app-header {
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+body[data-theme="light"] .app-header {
+  background: rgba(255, 255, 255, 0.8);
+  border-bottom: 1px solid var(--color-border);
+  backdrop-filter: blur(10px);
+}
+
+body[data-theme="dark"] .app-header h1 {
+  color: white;
+  background: linear-gradient(135deg, #fff 0%, #667eea 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+body[data-theme="light"] .app-header h1 {
+  color: var(--color-text);
+}
+
+/* 搜索过滤器 */
+body[data-theme="dark"] .search-filter {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+body[data-theme="light"] .search-filter {
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+body[data-theme="dark"] .search-input {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: white;
+  border-radius: 12px;
+  padding: 12px 16px 12px 44px;
+  transition: all 0.3s ease;
+}
+
+body[data-theme="light"] .search-input {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  border-radius: 12px;
+  padding: 12px 16px 12px 44px;
+  transition: all 0.3s ease;
+}
+
+body[data-theme="dark"] .search-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+body[data-theme="light"] .search-input::placeholder {
+  color: var(--color-text-secondary);
+}
+
+body[data-theme="dark"] .search-input:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+body[data-theme="light"] .search-input:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.1);
+  background: var(--color-bg);
+}
+
+body[data-theme="dark"] .filter-select {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: white;
+  border-radius: 12px;
+  padding: 12px 36px 12px 16px;
+  transition: all 0.3s ease;
+}
+
+body[data-theme="light"] .filter-select {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  border-radius: 12px;
+  padding: 12px 36px 12px 16px;
+  transition: all 0.3s ease;
+}
+
+body[data-theme="dark"] .filter-select:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+body[data-theme="light"] .filter-select:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.1);
+  background: var(--color-bg);
+}
+
+/* 按钮样式 */
+.download-all-btn,
+.update-cache-btn,
+.generate-report-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 12px;
+  padding: 10px 20px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  transition: all 0.3s ease;
+}
+
+.download-all-btn:hover:not(:disabled),
+.update-cache-btn:hover:not(:disabled),
+.generate-report-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.sort-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.7);
+  border-radius: 10px;
+  transition: all 0.3s ease;
+}
+
+.sort-btn:hover {
+  border-color: #667eea;
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.1);
+}
+
+.sort-btn.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-color: transparent;
+  color: white;
+}
+
+/* 项目卡片 */
+body[data-theme="dark"] .project-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 20px;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  backdrop-filter: blur(10px);
+}
+
+body[data-theme="light"] .project-card {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  padding: 20px;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+body[data-theme="dark"] .project-card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  border-color: rgba(102, 126, 234, 0.3);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+body[data-theme="light"] .project-card:hover {
+  transform: translateY(-8px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--color-accent);
+}
+
+.project-info h3 a {
+  color: var(--color-link);
+  transition: color 0.3s ease;
+}
+
+.project-info h3 a:hover {
+  color: var(--color-link-hover);
+}
+
+.description {
+  color: var(--color-text-secondary);
+}
+
+/* 标签和徽章 */
+.highlight-badge {
+  background: var(--color-highlight-bg);
+  color: var(--color-highlight-text);
+  border-radius: 12px;
+  padding: 4px 12px;
+  font-weight: 600;
+}
+
+.use-case-tag {
+  background: var(--color-tag-bg);
+  color: var(--color-tag-text);
+  border-radius: 12px;
+  padding: 4px 12px;
+  font-weight: 600;
+}
+
+/* 项目页脚 */
+.project-footer {
+  border-top: 1px solid var(--color-border);
+}
+
+.project-stats {
+  color: var(--color-text-secondary);
+}
+
+/* 加载和错误状态 */
+body[data-theme="dark"] .loading-spinner {
+  border-color: rgba(255, 255, 255, 0.2);
+  border-top-color: #667eea;
+}
+
+body[data-theme="light"] .loading-spinner {
+  border-color: var(--color-border);
+  border-top-color: var(--color-accent);
+}
+
+.error-state {
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error);
+}
+
+.retry-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  padding: 12px 24px;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.retry-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+/* 工具栏 */
+.toolbar {
+  padding: 16px 0;
+}
+
+.sort-label {
+  color: var(--color-text-secondary);
+}
+
+/* 响应式优化 */
+@media (max-width: 768px) {
+  .search-filter {
+    padding: 20px;
+  }
+
+  .project-card {
+    padding: 16px;
+  }
+}

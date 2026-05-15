@@ -238,36 +238,125 @@
 }
 
 .log-message {
-  color: var(--color-text);
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-.log-stdout .log-message {
-  color: var(--color-text);
+/* info 类型 - 白色/黑色 */
+body[data-theme="dark"] .log-info .log-message {
+  color: rgba(255, 255, 255, 0.85);
 }
 
-.log-stderr .log-message {
-  color: var(--color-error);
+body[data-theme="light"] .log-info .log-message {
+  color: #24292f;
 }
 
-.log-exit .log-message {
-  color: var(--color-accent);
+/* success 类型 - 绿色 */
+body[data-theme="dark"] .log-success .log-message {
+  color: #4ade80;
+  font-weight: 600;
+}
+
+body[data-theme="light"] .log-success .log-message {
+  color: #2ea44f;
+  font-weight: 600;
+}
+
+/* error 类型 - 红色 */
+body[data-theme="dark"] .log-error .log-message {
+  color: #ff6b6b;
+  font-weight: 600;
+}
+
+body[data-theme="light"] .log-error .log-message {
+  color: #d1242f;
+  font-weight: 600;
+}
+
+/* warning 类型 - 黄色 */
+body[data-theme="dark"] .log-warning .log-message {
+  color: #fbbf24;
   font-weight: 500;
 }
 
-.log-error .log-message {
-  color: var(--color-error);
+body[data-theme="light"] .log-warning .log-message {
+  color: #d97706;
   font-weight: 500;
 }
 
-.log-info .log-message {
-  color: var(--color-link);
+/* stdout 类型 */
+body[data-theme="dark"] .log-stdout .log-message {
+  color: rgba(255, 255, 255, 0.9);
 }
 
-.log-success .log-message {
-  color: var(--color-accent);
+body[data-theme="light"] .log-stdout .log-message {
+  color: #24292f;
+}
+
+/* stderr 类型 */
+body[data-theme="dark"] .log-stderr .log-message {
+  color: #ff6b6b;
   font-weight: 500;
+}
+
+body[data-theme="light"] .log-stderr .log-message {
+  color: #d1242f;
+  font-weight: 500;
+}
+
+/* exit 类型 */
+body[data-theme="dark"] .log-exit .log-message {
+  color: #a78bfa;
+  font-weight: 600;
+}
+
+body[data-theme="light"] .log-exit .log-message {
+  color: #7c3aed;
+  font-weight: 600;
+}
+
+/* separator 类型 - 分隔符（蓝色） */
+body[data-theme="dark"] .log-separator .log-message {
+  color: #60a5fa;
+  font-weight: 600;
+}
+
+body[data-theme="light"] .log-separator .log-message {
+  color: #2563eb;
+  font-weight: 600;
+}
+
+/* stats 类型 - 统计信息（青色） */
+body[data-theme="dark"] .log-stats .log-message {
+  color: #22d3ee;
+  font-weight: 600;
+}
+
+body[data-theme="light"] .log-stats .log-message {
+  color: #0891b2;
+  font-weight: 600;
+}
+
+/* skipped 类型 - 跳过信息（灰色） */
+body[data-theme="dark"] .log-skipped .log-message {
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+body[data-theme="light"] .log-skipped .log-message {
+  color: #6b7280;
+  font-weight: 400;
+}
+
+/* progress 类型 - 进度条（紫色） */
+body[data-theme="dark"] .log-progress .log-message {
+  color: #c084fc;
+  font-weight: 400;
+}
+
+body[data-theme="light"] .log-progress .log-message {
+  color: #9333ea;
+  font-weight: 400;
 }
 
 /* 响应式 */

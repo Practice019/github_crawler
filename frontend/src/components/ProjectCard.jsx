@@ -1,11 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { formatStarCount, getLastUpdatedDate, truncateDescription, getTechStackSummary, getHighlightsList } from '../utils/introFormatter';
 import axios from 'axios';
+import { cardHover, cardHoverOut, pulse } from '../utils/animations';
+import Notification from './Notification';
+import { useLog } from '../contexts/LogContext';
 
-function ProjectCard({ project }) {
+function ProjectCard({ project, index = 0 }) {
   const [generating, setGenerating] = useState(false);
   const [reportStatus, setReportStatus] = useState(null);
   const [imgError, setImgError] = useState(false);
+  const [notification, setNotification] = useState(null);
+  const cardRef = useRef(null);
+  const buttonRef = useRef(null);
+  const { addLog } = useLog();
 
   const intro = project.introduction;
   const highlights = intro ? getHighlightsList(intro) : [];
@@ -17,9 +24,18 @@ function ProjectCard({ project }) {
   };
 
   const handleGenerateReport = async (project) => {
+    const projectName = `${project.owner || project.author}/${project.name}`;
+
     try {
       setGenerating(true);
       setReportStatus('生成中...');
+
+      addLog('info', `开始生成报告: ${projectName}`);
+
+      // 按钮点击动画
+      if (buttonRef.current) {
+        pulse(buttonRef.current);
+      }
 
       const response = await axios.post('/api/reports/generate', {
         author: project.owner || project.author,
@@ -28,23 +44,58 @@ function ProjectCard({ project }) {
 
       if (response.data.success) {
         setReportStatus('✅ 报告生成成功！');
+        addLog('success', `✅ 报告生成成功: ${projectName}`);
+        addLog('info', `  文件路径: ${response.data.filePath}`);
+
         setTimeout(() => {
-          alert(`报告已生成！\n\n文件路径：${response.data.filePath}\n项目：${response.data.repo}\n\n报告已保存到 reports 目录，您可以在项目根目录的 reports 文件夹中查看。`);
+          setNotification({
+            message: `报告已生成！\n\n文件路径：${response.data.filePath}\n项目：${response.data.repo}\n\n报告已保存到 reports 目录`,
+            type: 'success'
+          });
           setReportStatus(null);
         }, 500);
       }
     } catch (error) {
       console.error('生成报告失败:', error);
+      const errorMsg = error.response?.data?.error || error.message;
       setReportStatus('❌ 生成失败');
+      addLog('error', `❌ 报告生成失败: ${projectName}`);
+      addLog('error', `  错误: ${errorMsg}`);
+
       setTimeout(() => setReportStatus(null), 3000);
-      alert(`生成报告失败：${error.response?.data?.error || error.message}`);
+      setNotification({
+        message: `生成报告失败：${errorMsg}`,
+        type: 'error'
+      });
     } finally {
       setGenerating(false);
     }
   };
 
+  // 卡片悬停效果
+  const handleMouseEnter = () => {
+    if (cardRef.current) {
+      cardHover(cardRef.current);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (cardRef.current) {
+      cardHoverOut(cardRef.current);
+    }
+  };
+
   return (
-    <article className="project-card">
+    <article
+      ref={cardRef}
+      className="project-card"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      style={{
+        opacity: 0,
+        transform: 'translateY(20px)'
+      }}
+    >
       <div className="project-header">
         {!imgError ? (
           <img
@@ -109,14 +160,24 @@ function ProjectCard({ project }) {
         </div>
         <div className="project-actions">
           <button
+            ref={buttonRef}
             className="generate-report-btn"
             onClick={() => handleGenerateReport(project)}
             title="生成项目深度报告"
+            disabled={generating}
           >
-            📄 生成报告
+            {generating ? '生成中...' : '📄 生成报告'}
           </button>
         </div>
       </div>
+
+      {notification && (
+        <Notification
+          message={notification.message}
+          type={notification.type}
+          onClose={() => setNotification(null)}
+        />
+      )}
     </article>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -6,6 +6,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { getIntroductionDetail, getIntroductions } from '../services/api';
 import axios from 'axios';
+import { fadeIn, pulse } from '../utils/animations';
 import './IntroductionDetailPage.css';
 
 function IntroductionDetailPage() {
@@ -24,6 +25,8 @@ function IntroductionDetailPage() {
   const [favorites, setFavorites] = useState([]);
   const [isFavorited, setIsFavorited] = useState(false);
   const statusFilter = searchParams.get('filter') || 'all';
+  const contentRef = useRef(null);
+  const favoriteButtonRef = useRef(null);
 
   useEffect(() => {
     fetchAllProjects();
@@ -56,6 +59,13 @@ function IntroductionDetailPage() {
   useEffect(() => {
     setIsFavorited(favorites.includes(projectId));
   }, [projectId, favorites]);
+
+  // 内容加载完成后添加淡入动画
+  useEffect(() => {
+    if (!loading && project && contentRef.current) {
+      fadeIn(contentRef.current, { duration: 500 });
+    }
+  }, [loading, project]);
 
   const fetchAllProjects = async () => {
     try {

@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { fadeIn, pulse, rotateLoading } from '../utils/animations';
+import { useLog } from '../contexts/LogContext';
 import './DocGeneratorPage.css';
 
 function DocGeneratorPage() {
-  const [logs, setLogs] = useState([]);
+  const { logs, addLog, clearLogs } = useLog();
   const [running, setRunning] = useState(false);
   const [starting, setStarting] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -15,12 +17,24 @@ function DocGeneratorPage() {
   const eventSourceRef = useRef(null);
 
   // 自动滚动到底部
-  const scrollToBottom = () => {
-    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottom = (smooth = true) => {
+    if (smooth) {
+      logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      logsEndRef.current?.scrollIntoView({ behavior: 'instant' });
+    }
   };
 
+  // 组件挂载时立即滚动到底部（不使用动画）
   useEffect(() => {
-    scrollToBottom();
+    scrollToBottom(false);
+  }, []);
+
+  // 日志更新时平滑滚动到底部
+  useEffect(() => {
+    if (logs.length > 0) {
+      scrollToBottom(true);
+    }
   }, [logs]);
 
   // 检查运行状态
@@ -41,6 +55,46 @@ function DocGeneratorPage() {
     }
   };
 
+  // 根据日志内容判断实际类型
+  const parseLogType = (originalType, message) => {
+    // 明确的日志级别标记
+    if (message.includes(' - ERROR - ')) return 'error';
+    if (message.includes(' - WARNING - ')) return 'warning';
+    if (message.includes(' - SUCCESS - ')) return 'success';
+
+    // 分隔符（=== 开头的行）- 使用特殊颜色
+    if (message.includes('===')) return 'separator';
+
+    // 统计信息（包含"总计"、"成功"、"跳过"、"失败"等）- 统一颜色
+    if (message.includes('总计:') || message.includes('成功:') ||
+        message.includes('跳过:') || message.includes('失败:') ||
+        message.includes('处理完成统计') || message.includes('报告已保存到')) {
+      return 'stats';
+    }
+
+    // 跳过信息
+    if (message.includes('⏭️') || message.includes('已跳过')) {
+      return 'skipped';
+    }
+
+    // 进度条
+    if (message.includes('处理进度:') || (message.includes('|') && message.includes('it/s'))) {
+      return 'progress';
+    }
+
+    // 对于 stderr 类型，如果不是明确的错误，转换为 info
+    if (originalType === 'stderr') return 'info';
+
+    // 对于 stdout 和其他类型，也转换为 info
+    if (originalType === 'stdout') return 'info';
+
+    // exit 类型保持不变
+    if (originalType === 'exit') return 'exit';
+
+    // 其他情况使用原始类型
+    return originalType;
+  };
+
   // 连接到日志流
   const connectToLogs = () => {
     if (eventSourceRef.current) {
@@ -52,7 +106,8 @@ function DocGeneratorPage() {
 
     eventSource.onmessage = (event) => {
       const log = JSON.parse(event.data);
-      setLogs(prev => [...prev, log]);
+      const actualType = parseLogType(log.type, log.message);
+      addLog(actualType, log.message);
 
       // 如果收到退出消息，更新运行状态
       if (log.type === 'exit' || log.type === 'error') {
@@ -70,7 +125,6 @@ function DocGeneratorPage() {
   const handleStart = async () => {
     try {
       setStarting(true);
-      setLogs([]);
 
       const response = await fetch('/api/doc-generator/run', {
         method: 'POST',
@@ -83,9 +137,11 @@ function DocGeneratorPage() {
         setRunning(true);
         connectToLogs();
       } else {
+        addLog('error', `启动失败: ${data.error}`);
         alert(`启动失败: ${data.error}`);
       }
     } catch (error) {
+      addLog('error', `启动失败: ${error.message}`);
       alert(`启动失败: ${error.message}`);
     } finally {
       setStarting(false);
@@ -192,7 +248,6 @@ function DocGeneratorPage() {
 
     try {
       setStarting(true);
-      setLogs([]);
 
       // 第零步：更新缓存（如果勾选）
       if (updateCacheBeforeStart) {
@@ -209,7 +264,8 @@ function DocGeneratorPage() {
             // 立即设置消息监听器（在 onopen 之前）
             eventSource.onmessage = (event) => {
               const log = JSON.parse(event.data);
-              addLog(log.type, log.message);
+              const actualType = parseLogType(log.type, log.message);
+              addLog(actualType, log.message);
 
               // 检测完成信号
               if (log.message.includes('缓存更新完成') || log.message.includes('缓存更新失败')) {
@@ -295,14 +351,6 @@ function DocGeneratorPage() {
   };
 
   // 添加日志到界面
-  const addLog = (type, message) => {
-    setLogs(prev => [...prev, {
-      type,
-      message,
-      timestamp: new Date().toISOString()
-    }]);
-  };
-
   // 解析 GitHub URL
   const parseGithubUrl = (url) => {
     try {
@@ -385,7 +433,9 @@ function DocGeneratorPage() {
 
   // 清空日志
   const handleClear = () => {
-    setLogs([]);
+    if (confirm('确定要清空所有运行日志吗？此操作不可恢复。')) {
+      clearLogs();
+    }
   };
 
   // 组件卸载时关闭连接
@@ -396,6 +446,13 @@ function DocGeneratorPage() {
       }
     };
   }, []);
+
+  // 根据日志类型返回样式类
+  const getLogStyle = (log) => {
+    // 对所有日志进行类型解析，包括客户端直接添加的日志
+    const actualType = parseLogType(log.type, log.message);
+    return `log-${actualType}`;
+  };
 
   return (
     <div className="doc-generator-page">
@@ -479,9 +536,13 @@ function DocGeneratorPage() {
             <div className="logs-empty">暂无日志，点击"启动"按钮开始运行</div>
           ) : (
             logs.map((log, index) => (
-              <div key={index} className={`log-line log-${log.type}`}>
+              <div key={log.id || index} className={`log-line ${getLogStyle(log)}`}>
                 <span className="log-timestamp">
-                  {log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : ''}
+                  {log.timestamp ? new Date(log.timestamp).toLocaleTimeString('zh-CN', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                  }) : ''}
                 </span>
                 <span className="log-message">{log.message}</span>
               </div>

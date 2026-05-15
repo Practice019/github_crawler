@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getIntroductions } from '../services/api';
 import axios from 'axios';
+import { staggerFadeIn } from '../utils/animations';
 import './IntroductionsPage.css';
 
 function IntroductionsPage() {
@@ -19,6 +20,7 @@ function IntroductionsPage() {
   const [editingTagId, setEditingTagId] = useState(null);
   const [editingTagLabel, setEditingTagLabel] = useState('');
   const navigate = useNavigate();
+  const gridRef = useRef(null);
 
   // 生成随机颜色，避免与现有颜色重复
   const generateRandomColor = () => {
@@ -207,29 +209,47 @@ function IntroductionsPage() {
     return projectStatuses[projectId] || 'unread';
   };
 
-  const filteredProjects = projects.filter(project => {
-    // 搜索筛选
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      const matchName = project.name?.toLowerCase().includes(query);
-      const matchOverview = project.overview?.toLowerCase().includes(query);
-      const matchSummary = project.summary?.toLowerCase().includes(query);
-      if (!matchName && !matchOverview && !matchSummary) return false;
-    }
+  const filteredProjects = useMemo(() => {
+    return projects.filter(project => {
+      // 搜索筛选
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        const matchName = project.name?.toLowerCase().includes(query);
+        const matchOverview = project.overview?.toLowerCase().includes(query);
+        const matchSummary = project.summary?.toLowerCase().includes(query);
+        if (!matchName && !matchOverview && !matchSummary) return false;
+      }
 
-    // 标签筛选
-    if (statusFilter !== 'all') {
-      const status = getProjectStatus(project.id);
-      if (status !== statusFilter) return false;
-    }
+      // 标签筛选
+      if (statusFilter !== 'all') {
+        const status = getProjectStatus(project.id);
+        if (status !== statusFilter) return false;
+      }
 
-    // 收藏筛选
-    if (favoriteFilter) {
-      if (!favorites.includes(project.id)) return false;
-    }
+      // 收藏筛选
+      if (favoriteFilter) {
+        if (!favorites.includes(project.id)) return false;
+      }
 
-    return true;
-  });
+      return true;
+    });
+  }, [projects, searchQuery, statusFilter, favoriteFilter, projectStatuses, favorites]);
+
+  // 当项目加载完成后，添加交错动画
+  useEffect(() => {
+    if (!loading && filteredProjects.length > 0 && gridRef.current) {
+      // 使用 requestAnimationFrame 确保 DOM 已经渲染
+      requestAnimationFrame(() => {
+        if (gridRef.current) {
+          const cards = gridRef.current.querySelectorAll('.intro-card');
+          if (cards.length > 0) {
+            // 触发动画
+            staggerFadeIn(Array.from(cards));
+          }
+        }
+      });
+    }
+  }, [loading, filteredProjects.length, statusFilter, favoriteFilter]);
 
   const getStatusCounts = () => {
     const counts = { all: projects.length, favorites: favorites.length };
@@ -393,7 +413,7 @@ function IntroductionsPage() {
           <p>没有符合条件的项目</p>
         </div>
       ) : (
-        <div className="projects-grid">
+        <div ref={gridRef} className="projects-grid">
           {filteredProjects.map((project) => {
             const currentTag = getCurrentTag(project.id);
             return (

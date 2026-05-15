@@ -312,6 +312,8 @@
   transition: all 0.2s ease;
   box-shadow: var(--shadow-sm);
   position: relative;
+  opacity: 0;
+  transform: translateY(30px);
 }
 
 .intro-card:hover {
