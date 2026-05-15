@@ -7,6 +7,16 @@ import { SkeletonGrid } from '../components/SkeletonCard';
 import Notification from '../components/Notification';
 import { staggerFadeIn, fadeIn } from '../utils/animations';
 import { useLog } from '../contexts/LogContext';
+import {
+  downloadSingleProject,
+  createDownloadStats,
+  updateStats,
+  handleDownloadError,
+  shouldStopDownload,
+  generateDownloadSummary,
+  generateRateLimitWarning,
+  delay
+} from '../utils/downloadHelpers';
 
 function HomePage() {
   const [projects, setProjects] = useState([]);
@@ -86,10 +96,7 @@ function HomePage() {
       addLog('info', `========== 开始批量下载 README ==========`);
       addLog('info', `总计项目数：${filteredProjects.length}`);
 
-      let successCount = 0;
-      let failCount = 0;
-      let skippedCount = 0;
-      const failedRepos = [];
+      const stats = createDownloadStats();
 
       for (let i = 0; i < filteredProjects.length; i++) {
         const project = filteredProjects[i];
@@ -98,80 +105,48 @@ function HomePage() {
         try {
           addLog('info', `[${i + 1}/${filteredProjects.length}] 下载: ${projectName}`);
 
-          const response = await fetch('/api/reports/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              author: project.author || project.owner,
-              name: project.name,
-              skipIfExists: true  // 跳过已存在的文件
-            })
-          });
+          const result = await downloadSingleProject(project, { skipIfExists: true });
 
-          if (response.ok) {
-            const data = await response.json();
-            if (data.skipped) {
-              skippedCount++;
-              addLog('info', `  ⏭️ 已跳过（文件已存在）`);
-              // 跳过的项目不需要延迟
-            } else {
-              successCount++;
-              addLog('success', `  ✅ 下载成功`);
-              // 只有成功下载的才需要延迟，避免速率限制
-              if (i < filteredProjects.length - 1) {
-                await new Promise(resolve => setTimeout(resolve, 500));
-              }
-            }
+          if (result.skipped) {
+            stats.skipped++;
+            addLog('info', `  ⏭️ 已跳过（文件已存在）`);
           } else {
-            failCount++;
-            const errorData = await response.json();
-            const errorMsg = errorData.error || 'Unknown error';
-            addLog('error', `  ❌ 下载失败: ${errorMsg}`);
-            failedRepos.push({
-              name: projectName,
-              reason: errorMsg
-            });
-
-            // 如果遇到速率限制，停止下载
-            if (errorData.error && errorData.error.includes('rate limit')) {
-              addLog('warning', `⚠️ GitHub API 速率限制，停止下载`);
-              setNotification({
-                message: `⚠️ GitHub API 速率限制\n\n${errorData.error}\n\n已下载：${successCount} 个\n已跳过：${skippedCount} 个\n失败：${failCount} 个\n\n建议：\n1. 添加 GITHUB_TOKEN 到 .env 文件\n2. 等待速率限制重置后继续`,
-                type: 'warning'
-              });
-              break;
+            stats.success++;
+            addLog('success', `  ✅ 下载成功`);
+            // 只有成功下载的才需要延迟，避免速率限制
+            if (i < filteredProjects.length - 1) {
+              await delay(500);
             }
           }
-        } catch (err) {
-          failCount++;
-          const errorMsg = err.message || 'Network error';
-          addLog('error', `  ❌ 下载失败: ${errorMsg}`);
-          failedRepos.push({
-            name: projectName,
-            reason: errorMsg
-          });
+        } catch (error) {
+          handleDownloadError(error, stats, projectName);
+          addLog('error', `  ❌ 下载失败: ${error.message}`);
+
+          // 如果遇到速率限制，停止下载
+          if (shouldStopDownload(error)) {
+            addLog('warning', `⚠️ GitHub API 速率限制，停止下载`);
+            setNotification({
+              message: generateRateLimitWarning(error.message, stats),
+              type: 'warning'
+            });
+            break;
+          }
         }
 
         setDownloadProgress({ current: i + 1, total: filteredProjects.length });
       }
 
       addLog('success', `========== 批量下载完成 ==========`);
-      addLog('success', `✅ 新下载：${successCount} 个`);
-      addLog('info', `⏭️ 已跳过：${skippedCount} 个`);
-      if (failCount > 0) {
-        addLog('error', `❌ 失败：${failCount} 个`);
+      addLog('success', `✅ 新下载：${stats.success} 个`);
+      addLog('info', `⏭️ 已跳过：${stats.skipped} 个`);
+      if (stats.failed > 0) {
+        addLog('error', `❌ 失败：${stats.failed} 个`);
       }
 
-      let message = `下载完成！\n✅ 新下载：${successCount} 个\n⏭️ 已跳过：${skippedCount} 个\n❌ 失败：${failCount} 个\n\n文件已保存到 reports 目录`;
-
-      if (failedRepos.length > 0) {
-        message += '\n\n失败的仓库：\n' + failedRepos.slice(0, 5).map(r => `• ${r.name}: ${r.reason}`).join('\n');
-        if (failedRepos.length > 5) {
-          message += `\n... 还有 ${failedRepos.length - 5} 个失败`;
-        }
-      }
-
-      setNotification({ message, type: 'success' });
+      setNotification({
+        message: generateDownloadSummary(stats),
+        type: 'success'
+      });
     } catch (err) {
       addLog('error', `批量下载失败：${err.message}`);
       setNotification({ message: `批量下载失败：${err.message}`, type: 'error' });

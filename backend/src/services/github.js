@@ -86,42 +86,26 @@ async function getTrendingProjects(options = {}) {
 
   // 动态计算日期范围
   const now = new Date();
-  let dateRange;
-  switch (since) {
-    case 'daily':
-      const yesterday = new Date(now);
-      yesterday.setDate(yesterday.getDate() - 1);
-      dateRange = `>${yesterday.toISOString().split('T')[0]}`;
-      break;
-    case 'weekly':
-      const lastWeek = new Date(now);
-      lastWeek.setDate(lastWeek.getDate() - 7);
-      dateRange = `>${lastWeek.toISOString().split('T')[0]}`;
-      break;
-    case 'monthly':
-      const lastMonth = new Date(now);
-      lastMonth.setMonth(lastMonth.getMonth() - 1);
-      dateRange = `>${lastMonth.toISOString().split('T')[0]}`;
-      break;
-    default:
-      const defaultWeek = new Date(now);
-      defaultWeek.setDate(defaultWeek.getDate() - 7);
-      dateRange = `>${defaultWeek.toISOString().split('T')[0]}`;
-  }
+  const daysMap = { daily: 1, weekly: 7, monthly: 30 };
+  const days = daysMap[since] || 7;
+  const targetDate = new Date(now);
+  targetDate.setDate(targetDate.getDate() - days);
+  const dateRange = `>${targetDate.toISOString().split('T')[0]}`;
   query += ` pushed:${dateRange}`;
 
-  let retries = 0;
-  while (retries < MAX_RETRIES) {
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
       const repos = await searchRepositories(query);
       cache.set(cacheKeyStr, repos);
       return repos;
     } catch (error) {
-      retries++;
-      if (retries >= MAX_RETRIES || error.response?.status !== 403) {
+      const isLastAttempt = attempt === MAX_RETRIES - 1;
+      const isRateLimitError = error.response?.status === 403;
+
+      if (isLastAttempt || !isRateLimitError) {
         throw error;
       }
-      await sleep(RATE_LIMIT_RETRY_DELAY * retries);
+      await sleep(RATE_LIMIT_RETRY_DELAY * (attempt + 1));
     }
   }
 }

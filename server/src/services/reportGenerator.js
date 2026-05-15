@@ -1,6 +1,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const axios = require('axios');
+const { addProxyToConfig } = require('../utils/proxyConfig');
 
 const REPORTS_DIR = path.join(__dirname, '..', '..', '..', 'reports');
 
@@ -24,16 +25,11 @@ async function downloadReadme(repo) {
         headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
       }
 
-      const response = await axios.get(`https://api.github.com/repos/${repo.author}/${repo.name}/readme`, {
+      const response = await axios.get(`https://api.github.com/repos/${repo.author}/${repo.name}/readme`, addProxyToConfig({
         headers,
         timeout: 30000,
-        proxy: {
-          host: '127.0.0.1',
-          port: 7890,
-          protocol: 'http'
-        },
         validateStatus: null // 允许所有状态码，手动处理
-      });
+      }));
 
       // 检查速率限制
       if (response.status === 403) {

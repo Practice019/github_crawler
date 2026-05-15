@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { addProxyToConfig } = require('../utils/proxyConfig');
 const GITHUB_API = 'https://api.github.com';
 const GITHUB_TRENDING = 'https://github.com/trending';
 const LANGUAGES = ['', 'javascript', 'typescript', 'python', 'go', 'rust', 'java', 'cpp', 'vue'];
@@ -32,18 +33,13 @@ async function fetchTrendingRepos(language = 'all', since = 'daily') {
 
       console.log(`[Attempt ${attempt}/${maxRetries}] Fetching trending from: ${url}`);
 
-      const response = await axios.get(url, {
+      const response = await axios.get(url, addProxyToConfig({
         headers: {
           'Accept': 'text/html',
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         },
-        timeout: 30000,
-        proxy: {
-          host: '127.0.0.1',
-          port: 7890,
-          protocol: 'http'
-        }
-      });
+        timeout: 30000
+      }));
 
       const html = response.data;
       const $ = cheerio.load(html);
@@ -150,15 +146,10 @@ async function fetchRepoDetails(author, name) {
       headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
     }
 
-    const axiosConfig = {
+    const axiosConfig = addProxyToConfig({
       headers,
-      timeout: 30000,
-      proxy: {
-        host: '127.0.0.1',
-        port: 7890,
-        protocol: 'http'
-      }
-    };
+      timeout: 30000
+    });
 
     const [repoRes, readmeRes] = await Promise.all([
       axios.get(`${GITHUB_API}/repos/${author}/${name}`, axiosConfig),
