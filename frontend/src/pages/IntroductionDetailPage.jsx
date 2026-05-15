@@ -276,6 +276,20 @@ function IntroductionDetailPage() {
 
         <div className="header-right">
           <button
+            className="quick-tag-btn valuable-btn"
+            onClick={() => handleStatusChange('valuable')}
+            title="标记为有价值"
+          >
+            ✓ 有价值
+          </button>
+          <button
+            className="quick-tag-btn not-valuable-btn"
+            onClick={() => handleStatusChange('not-valuable')}
+            title="标记为无价值"
+          >
+            ✗ 无价值
+          </button>
+          <button
             className={`favorite-btn-detail ${isFavorited ? 'favorited' : ''}`}
             onClick={handleToggleFavorite}
             title={isFavorited ? '取消收藏' : '收藏'}

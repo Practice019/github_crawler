@@ -327,7 +327,7 @@ function IntroductionsPage() {
         <div className="tag-manager">
           <h3>标签管理</h3>
           <div className="tag-list">
-            {tags.map(tag => (
+            {tags.filter(tag => !['unread', 'valuable', 'not-valuable'].includes(tag.id)).map(tag => (
               <div key={tag.id} className="tag-item">
                 <span className="tag-color" style={{ backgroundColor: tag.color }}></span>
                 {editingTagId === tag.id ? (
@@ -349,16 +349,12 @@ function IntroductionsPage() {
                 ) : (
                   <>
                     <span className="tag-label">{tag.label}</span>
-                    {!['unread'].includes(tag.id) && (
-                      <>
-                        <button className="edit-tag-btn" onClick={() => handleStartEdit(tag)}>
-                          ✎
-                        </button>
-                        <button className="delete-tag-btn" onClick={() => handleDeleteTag(tag.id)}>
-                          ✕
-                        </button>
-                      </>
-                    )}
+                    <button className="edit-tag-btn" onClick={() => handleStartEdit(tag)}>
+                      ✎
+                    </button>
+                    <button className="delete-tag-btn" onClick={() => handleDeleteTag(tag.id)}>
+                      ✕
+                    </button>
                   </>
                 )}
               </div>

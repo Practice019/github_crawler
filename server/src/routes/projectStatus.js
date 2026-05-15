@@ -7,7 +7,9 @@ const STATUS_FILE = path.join(__dirname, '..', '..', '..', 'introductions', '.st
 
 // 默认标签
 const DEFAULT_TAGS = [
-  { id: 'unread', label: '未读', color: '#6366f1' }
+  { id: 'unread', label: '未读', color: '#6366f1' },
+  { id: 'valuable', label: '有价值', color: '#10b981' },
+  { id: 'not-valuable', label: '无价值', color: '#ef4444' }
 ];
 
 // 读取状态文件
