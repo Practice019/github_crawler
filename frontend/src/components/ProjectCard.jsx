@@ -102,7 +102,10 @@ function ProjectCard({ project, index = 0 }) {
             src={project.ownerAvatar || project.avatar || `https://github.com/${project.owner || project.author}.png`}
             alt={`${project.owner || project.author} avatar`}
             className="avatar"
+            width="48"
+            height="48"
             loading="lazy"
+            decoding="async"
             onError={() => setImgError(true)}
           />
         ) : (
@@ -182,4 +185,4 @@ function ProjectCard({ project, index = 0 }) {
   );
 }
 
-export default ProjectCard;
+export default React.memo(ProjectCard);

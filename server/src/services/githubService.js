@@ -224,10 +224,36 @@ function generateProjectIntro(repo) {
   return intro.join(' ');
 }
 
+/**
+ * 分页获取 trending 项目
+ * @param {Object} options - 选项
+ * @returns {Object} - 分页结果
+ */
+async function fetchTrendingPaginated(options = {}) {
+  const { language = 'all', since = 'daily', page = 1, perPage = 20 } = options;
+
+  const allRepos = await fetchTrendingRepos(language, since);
+  const start = (page - 1) * perPage;
+  const end = start + perPage;
+
+  return {
+    data: allRepos.slice(start, end),
+    pagination: {
+      page,
+      perPage,
+      total: allRepos.length,
+      totalPages: Math.ceil(allRepos.length / perPage),
+      hasNext: end < allRepos.length,
+      hasPrev: page > 1
+    }
+  };
+}
+
 module.exports = {
   fetchTrendingRepos,
   fetchRepoDetails,
   fetchAllTrending,
+  fetchTrendingPaginated,
   generateProjectIntro,
   LANGUAGES,
 };

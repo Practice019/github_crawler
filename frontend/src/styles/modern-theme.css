@@ -187,6 +187,31 @@ body[data-theme="light"] .filter-select:focus {
   background: var(--color-bg);
 }
 
+/* 下拉选项样式 - 修复暗黑模式下看不见的问题 */
+body[data-theme="dark"] .filter-select option {
+  background: #1a1f3a;
+  color: white;
+  padding: 8px;
+}
+
+body[data-theme="light"] .filter-select option {
+  background: var(--color-bg);
+  color: var(--color-text);
+  padding: 8px;
+}
+
+body[data-theme="dark"] .filter-select option:hover,
+body[data-theme="dark"] .filter-select option:checked {
+  background: #667eea;
+  color: white;
+}
+
+body[data-theme="light"] .filter-select option:hover,
+body[data-theme="light"] .filter-select option:checked {
+  background: var(--color-highlight-bg);
+  color: var(--color-text);
+}
+
 /* 按钮样式 */
 .download-all-btn,
 .update-cache-btn,

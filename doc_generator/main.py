@@ -316,8 +316,8 @@ async def main():
                         help='测试模式：只处理第一个文件')
     parser.add_argument('--limit', type=int, default=None,
                         help='限制处理文件数量（例如：--limit 5）')
-    parser.add_argument('--concurrent', type=int, default=5,
-                        help='并发数（默认：5，建议 3-5）')
+    parser.add_argument('--concurrent', type=int, default=10,
+                        help='并发数（默认：10）')
     args = parser.parse_args()
 
     # 配置路径

@@ -4,9 +4,10 @@ const githubService = require('../services/githubService');
 const cache = require('../services/cacheService');
 const reportGenerator = require('../services/reportGenerator');
 const scheduler = require('../services/scheduler');
+const { cacheControl, noCache } = require('../middleware/cacheMiddleware');
 
-// GET /api/trending - 获取trending项目
-router.get('/trending', async (req, res) => {
+// GET /api/trending - 获取trending项目（缓存 1 年）
+router.get('/trending', cacheControl(31536000), async (req, res) => {
   try {
     const { since = 'weekly', language = '' } = req.query;
 
@@ -82,8 +83,8 @@ router.get('/trending', async (req, res) => {
   }
 });
 
-// GET /api/github/trending - 兼容旧路由
-router.get('/github/trending', async (req, res) => {
+// GET /api/github/trending - 兼容旧路由（缓存 1 年）
+router.get('/github/trending', cacheControl(31536000), async (req, res) => {
   try {
     const { since = 'weekly', language = '' } = req.query;
 
@@ -159,8 +160,8 @@ router.get('/github/trending', async (req, res) => {
   }
 });
 
-// POST /api/reports/generate - 生成项目报告
-router.post('/reports/generate', async (req, res) => {
+// POST /api/reports/generate - 生成项目报告（不缓存）
+router.post('/reports/generate', noCache(), async (req, res) => {
   try {
     const { author, name, skipIfExists } = req.body;
 

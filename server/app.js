@@ -7,6 +7,7 @@ const introductionsRoutes = require('./src/routes/introductions');
 const docGeneratorRoutes = require('./src/routes/docGenerator');
 const projectStatusRoutes = require('./src/routes/projectStatus');
 const scheduler = require('./src/services/scheduler');
+const { performanceMonitor, memoryMonitor } = require('./src/middleware/performanceMonitor');
 
 // 手动加载 .env 文件
 const envPath = path.join(__dirname, '..', '.env');
@@ -33,6 +34,16 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
+
+// 性能监控中间件
+app.use(performanceMonitor({
+  slowThreshold: 1000, // 1秒以上视为慢请求
+  logAllRequests: true,
+  logSlowRequests: true
+}));
+
+// 启动内存监控（每分钟检查一次）
+memoryMonitor(60000);
 
 // Debug middleware
 app.use((req, res, next) => {

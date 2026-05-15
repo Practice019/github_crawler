@@ -1,14 +1,32 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
-import WelcomePage from './pages/WelcomePage';
-import HomePage from './pages/HomePage';
-import IntroductionsPage from './pages/IntroductionsPage';
-import IntroductionDetailPage from './pages/IntroductionDetailPage';
-import DocGeneratorPage from './pages/DocGeneratorPage';
 import './App.css';
 import './styles/animations.css';
 import './styles/modern-theme.css';
+
+// 路由级代码分割 - 懒加载页面组件
+const WelcomePage = lazy(() => import('./pages/WelcomePage'));
+const HomePage = lazy(() => import('./pages/HomePage'));
+const IntroductionsPage = lazy(() => import('./pages/IntroductionsPage'));
+const IntroductionDetailPage = lazy(() => import('./pages/IntroductionDetailPage'));
+const DocGeneratorPage = lazy(() => import('./pages/DocGeneratorPage'));
+
+// 加载中组件
+function LoadingFallback() {
+  return (
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      height: '100vh',
+      fontSize: '18px',
+      color: '#666'
+    }}>
+      加载中...
+    </div>
+  );
+}
 
 function App() {
   const location = useLocation();
@@ -35,9 +53,11 @@ function App() {
 
   if (isWelcomePage) {
     return (
-      <Routes>
-        <Route path="/" element={<WelcomePage />} />
-      </Routes>
+      <Suspense fallback={<LoadingFallback />}>
+        <Routes>
+          <Route path="/" element={<WelcomePage />} />
+        </Routes>
+      </Suspense>
     );
   }
 
@@ -51,12 +71,14 @@ function App() {
           </header>
         )}
         <main className="app-main">
-          <Routes>
-            <Route path="/trending" element={<HomePage />} />
-            <Route path="/introductions" element={<IntroductionsPage />} />
-            <Route path="/introductions/:projectId" element={<IntroductionDetailPage />} />
-            <Route path="/doc-generator" element={<DocGeneratorPage />} />
-          </Routes>
+          <Suspense fallback={<LoadingFallback />}>
+            <Routes>
+              <Route path="/trending" element={<HomePage />} />
+              <Route path="/introductions" element={<IntroductionsPage />} />
+              <Route path="/introductions/:projectId" element={<IntroductionDetailPage />} />
+              <Route path="/doc-generator" element={<DocGeneratorPage />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
     </div>
