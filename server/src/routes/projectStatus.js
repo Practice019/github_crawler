@@ -17,18 +17,20 @@ async function readStatus() {
   try {
     const data = await fs.readFile(STATUS_FILE, 'utf-8');
     const parsed = JSON.parse(data);
-    // 确保有 tags、projectStatuses 和 favorites 字段
+    // 确保有 tags、projectStatuses、favorites 和 notes 字段
     return {
       tags: parsed.tags || DEFAULT_TAGS,
       projectStatuses: parsed.projectStatuses || {},
-      favorites: parsed.favorites || []
+      favorites: parsed.favorites || [],
+      notes: parsed.notes || {}
     };
   } catch (error) {
     // 文件不存在，返回默认值
     return {
       tags: DEFAULT_TAGS,
       projectStatuses: {},
-      favorites: []
+      favorites: [],
+      notes: {}
     };
   }
 }
@@ -258,6 +260,111 @@ router.delete('/favorites/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('取消收藏失败:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/project-status/notes/:projectId - 获取项目备注
+router.get('/notes/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const data = await readStatus();
+
+    const note = data.notes[projectId] || null;
+
+    res.json({
+      success: true,
+      data: note
+    });
+  } catch (error) {
+    console.error('获取备注失败:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// PUT /api/project-status/notes/:projectId - 创建/更新项目备注
+router.put('/notes/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const { content } = req.body;
+
+    // 验证内容
+    if (content === undefined) {
+      return res.status(400).json({
+        success: false,
+        error: '备注内容不能为空'
+      });
+    }
+
+    const data = await readStatus();
+
+    // 如果内容为空字符串，删除备注
+    if (!content.trim()) {
+      delete data.notes[projectId];
+      await saveStatus(data);
+      return res.json({
+        success: true,
+        data: null,
+        message: '备注已删除'
+      });
+    }
+
+    // 验证内容长度
+    if (content.length > 5000) {
+      return res.status(400).json({
+        success: false,
+        error: '备注内容不能超过 5000 字符'
+      });
+    }
+
+    const now = new Date().toISOString();
+    const existingNote = data.notes[projectId];
+
+    // 创建或更新备注
+    const note = {
+      content: content,
+      createdAt: existingNote ? existingNote.createdAt : now,
+      updatedAt: now
+    };
+
+    data.notes[projectId] = note;
+    await saveStatus(data);
+
+    res.json({
+      success: true,
+      data: note
+    });
+  } catch (error) {
+    console.error('保存备注失败:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// DELETE /api/project-status/notes/:projectId - 删除项目备注
+router.delete('/notes/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const data = await readStatus();
+
+    // 删除备注
+    delete data.notes[projectId];
+    await saveStatus(data);
+
+    res.json({
+      success: true,
+      message: '备注已删除'
+    });
+  } catch (error) {
+    console.error('删除备注失败:', error);
     res.status(500).json({
       success: false,
       error: error.message

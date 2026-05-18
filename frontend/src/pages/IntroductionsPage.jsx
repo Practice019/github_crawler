@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getIntroductions } from '../services/api';
 import axios from 'axios';
 import { staggerFadeIn } from '../utils/animations';
+import NoteModal from '../components/NoteModal';
 import './IntroductionsPage.css';
 
 function IntroductionsPage() {
@@ -10,6 +11,7 @@ function IntroductionsPage() {
   const [tags, setTags] = useState([]);
   const [projectStatuses, setProjectStatuses] = useState({});
   const [favorites, setFavorites] = useState([]);
+  const [notes, setNotes] = useState({}); // 备注数据
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all'); // all 或标签 id
@@ -19,6 +21,9 @@ function IntroductionsPage() {
   const [newTagLabel, setNewTagLabel] = useState('');
   const [editingTagId, setEditingTagId] = useState(null);
   const [editingTagLabel, setEditingTagLabel] = useState('');
+  const [showNoteModal, setShowNoteModal] = useState(false); // 备注模态框
+  const [editingNoteProjectId, setEditingNoteProjectId] = useState(null); // 正在编辑的项目ID
+  const [editingNoteProjectName, setEditingNoteProjectName] = useState(''); // 正在编辑的项目名称
   const navigate = useNavigate();
   const gridRef = useRef(null);
 
@@ -53,6 +58,7 @@ function IntroductionsPage() {
         setTags(response.data.data.tags);
         setProjectStatuses(response.data.data.projectStatuses);
         setFavorites(response.data.data.favorites || []);
+        setNotes(response.data.data.notes || {}); // 获取备注数据
       }
     } catch (err) {
       console.error('获取状态失败:', err);
@@ -203,6 +209,44 @@ function IntroductionsPage() {
       console.error('收藏操作失败:', err);
       alert('收藏操作失败');
     }
+  };
+
+  const handleNoteClick = (projectId, projectName, event) => {
+    event.stopPropagation(); // 阻止卡片点击事件
+    setEditingNoteProjectId(projectId);
+    setEditingNoteProjectName(projectName);
+    setShowNoteModal(true);
+  };
+
+  const handleNoteSave = (noteData) => {
+    // 更新本地状态
+    if (noteData === null) {
+      // 删除备注
+      setNotes(prev => {
+        const newNotes = { ...prev };
+        delete newNotes[editingNoteProjectId];
+        return newNotes;
+      });
+    } else {
+      // 添加或更新备注
+      setNotes(prev => ({
+        ...prev,
+        [editingNoteProjectId]: noteData
+      }));
+    }
+  };
+
+  const handleNoteModalClose = () => {
+    setShowNoteModal(false);
+    setEditingNoteProjectId(null);
+    setEditingNoteProjectName('');
+  };
+
+  const truncateNote = (content) => {
+    if (!content) return '';
+    // 限制为约 60 个字符
+    if (content.length <= 60) return content;
+    return content.substring(0, 60) + '...';
   };
 
   const getProjectStatus = (projectId) => {
@@ -446,6 +490,28 @@ function IntroductionsPage() {
                 </div>
                 <div className="intro-card-body">
                   <p className="intro-card-overview">{project.overview || project.summary}</p>
+
+                  {/* 备注区域 */}
+                  <div className="intro-card-note-section">
+                    {notes[project.id] ? (
+                      <div
+                        className="note-preview"
+                        onClick={(e) => handleNoteClick(project.id, project.name, e)}
+                      >
+                        <div className="note-icon">📝</div>
+                        <div className="note-content">{truncateNote(notes[project.id].content)}</div>
+                        <button className="note-edit-btn" title="编辑备注">✎</button>
+                      </div>
+                    ) : (
+                      <div
+                        className="note-placeholder"
+                        onClick={(e) => handleNoteClick(project.id, project.name, e)}
+                      >
+                        <div className="note-icon">📝</div>
+                        <span>添加备注...</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="intro-card-footer">
                   <div className="footer-left">
@@ -480,6 +546,17 @@ function IntroductionsPage() {
             );
           })}
         </div>
+      )}
+
+      {/* 备注模态框 */}
+      {showNoteModal && (
+        <NoteModal
+          projectId={editingNoteProjectId}
+          projectName={editingNoteProjectName}
+          initialNote={notes[editingNoteProjectId]}
+          onClose={handleNoteModalClose}
+          onSave={handleNoteSave}
+        />
       )}
     </div>
   );
