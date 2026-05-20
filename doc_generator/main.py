@@ -320,9 +320,10 @@ async def main():
                         help='并发数（默认：10）')
     args = parser.parse_args()
 
-    # 配置路径
-    source_dir = "D:/test/31/reports"
-    output_dir = "D:/test/31/introductions"
+    # 配置路径（使用当前脚本所在目录的相对路径）
+    script_dir = Path(__file__).parent
+    source_dir = script_dir / "reports"
+    output_dir = script_dir / "introductions"
 
     # 创建生成器
     generator = SimpleDocumentGenerator(source_dir, output_dir)
