@@ -15,20 +15,20 @@ import functools
 try:
     from tqdm.asyncio import tqdm
 except ImportError:
-    os.system("pip install tqdm")
+    os.system("pip3 install tqdm")
     from tqdm.asyncio import tqdm
 
 try:
     from openai import AsyncOpenAI
 except ImportError:
     print("正在安装 openai...")
-    os.system("pip install openai")
+    os.system("pip3 install openai")
     from openai import AsyncOpenAI
 
 try:
     from dotenv import load_dotenv
 except ImportError:
-    os.system("pip install python-dotenv")
+    os.system("pip3 install python-dotenv")
     from dotenv import load_dotenv
 
 # 加载环境变量

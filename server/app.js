@@ -37,14 +37,20 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 
 app.use(cors({
   origin: (origin, callback) => {
-    // 在生产环境要求 origin 头
-    if (!origin && process.env.NODE_ENV === 'production') {
+    // 开发环境允许所有来源
+    if (process.env.NODE_ENV !== 'production') {
+      callback(null, true);
+      return;
+    }
+
+    // 生产环境要求 origin 头
+    if (!origin) {
       callback(new Error('Origin header required in production'));
       return;
     }
 
-    // 允许无 origin（开发环境）或白名单中的 origin
-    if (!origin || allowedOrigins.includes(origin)) {
+    // 生产环境检查白名单
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));

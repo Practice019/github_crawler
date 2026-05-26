@@ -148,7 +148,7 @@ router.post('/run', (req, res) => {
     console.log(`Working directory: ${workingDir}`);
 
     // 启动 Python 进程
-    const childProcess = spawn('python', [pythonScript], {
+    const childProcess = spawn('python3.8', [pythonScript], {
       cwd: workingDir,
       env: {
         ...process.env,
