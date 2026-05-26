@@ -60,17 +60,23 @@ function memoryMonitor(intervalMs = 60000) {
     const usage = process.memoryUsage();
     const mb = (bytes) => Math.round(bytes / 1024 / 1024);
 
-    console.log('📊 Memory Usage:', {
-      rss: `${mb(usage.rss)}MB`,
-      heapTotal: `${mb(usage.heapTotal)}MB`,
-      heapUsed: `${mb(usage.heapUsed)}MB`,
-      external: `${mb(usage.external)}MB`
-    });
-
-    // 如果堆内存使用超过 80%，发出警告
+    // 只在内存使用超过阈值时记录
     const heapUsagePercent = (usage.heapUsed / usage.heapTotal) * 100;
-    if (heapUsagePercent > 80) {
-      console.warn(`⚠️  High memory usage: ${heapUsagePercent.toFixed(1)}%`);
+
+    // 堆内存使用率超过 95% 才警告（Node.js 会自动扩展堆）
+    if (heapUsagePercent > 95) {
+      console.warn(`⚠️  High heap memory usage: ${heapUsagePercent.toFixed(1)}%`);
+      console.log('📊 Memory Usage:', {
+        rss: `${mb(usage.rss)}MB`,
+        heapTotal: `${mb(usage.heapTotal)}MB`,
+        heapUsed: `${mb(usage.heapUsed)}MB`,
+        external: `${mb(usage.external)}MB`
+      });
+    }
+
+    // RSS 超过 500MB 才警告
+    if (usage.rss > 500 * 1024 * 1024) {
+      console.warn(`⚠️  High RSS memory: ${mb(usage.rss)}MB`);
     }
   }, intervalMs);
 }
