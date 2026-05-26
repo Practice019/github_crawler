@@ -5,80 +5,166 @@ const { addProxyToConfig } = require('../utils/proxyConfig');
 
 const REPORTS_DIR = path.join(__dirname, '..', '..', '..', 'reports');
 
+// 常量定义
+const MAX_RETRIES = 3;
+const INITIAL_WAIT_TIME = 1000;
+const MAX_WAIT_TIME = 5000;
+const REQUEST_TIMEOUT = 30000;
+
 /**
- * 从 GitHub 下载原生 README.md
+ * 清理文件名，移除特殊字符
+ * @param {String} name - 原始文件名
+ * @returns {String} - 清理后的文件名
+ */
+function sanitizeFilename(name) {
+  return name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 200);
+}
+
+/**
+ * 检查速率限制重置时间
+ * @param {String|Number} rateLimitReset - 重置时间戳
+ * @returns {Date} - 重置时间
+ */
+function parseRateLimitReset(rateLimitReset) {
+  const timestamp = typeof rateLimitReset === 'string'
+    ? parseInt(rateLimitReset)
+    : rateLimitReset;
+  return new Date(timestamp * 1000);
+}
+
+/**
+ * 构建请求头
+ * @returns {Object} - 请求头对象
+ */
+function buildHeaders() {
+  const headers = {
+    'Accept': 'application/vnd.github.v3.raw',
+    'User-Agent': 'GitHub-Trending-App',
+  };
+
+  if (process.env.GITHUB_TOKEN) {
+    headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
+  }
+
+  return headers;
+}
+
+/**
+ * 处理速率限制错误
+ * @param {Object} response - HTTP 响应对象
+ * @throws {Error} - 速率限制错误
+ */
+function handleRateLimitError(response) {
+  const rateLimitRemaining = response.headers['x-ratelimit-remaining'];
+  const rateLimitReset = response.headers['x-ratelimit-reset'];
+
+  if (rateLimitRemaining === '0') {
+    const resetTime = parseRateLimitReset(rateLimitReset);
+    const waitMinutes = Math.ceil((resetTime - new Date()) / 60000);
+    throw new Error(`GitHub API rate limit exceeded. Resets in ${waitMinutes} minutes. Consider adding GITHUB_TOKEN to .env file.`);
+  }
+  throw new Error('GitHub API access forbidden. Check your GITHUB_TOKEN.');
+}
+
+/**
+ * 处理 API 错误响应
+ * @param {Object} response - HTTP 响应对象
+ * @throws {Error} - API 错误
+ */
+function handleApiErrors(response) {
+  if (response.status === 403) {
+    handleRateLimitError(response);
+  }
+
+  if (response.status === 404) {
+    throw new Error('README not found (repository may not have a README file)');
+  }
+
+  if (response.status === 401) {
+    throw new Error('Authentication failed (check GITHUB_TOKEN)');
+  }
+
+  if (response.status !== 200) {
+    throw new Error(`Failed to fetch README: HTTP ${response.status}`);
+  }
+}
+
+/**
+ * 验证 README 内容
+ * @param {String} readme - README 内容
+ * @throws {Error} - 如果内容为空
+ */
+function validateReadme(readme) {
+  if (!readme || readme.trim().length === 0) {
+    throw new Error('README file is empty');
+  }
+}
+
+/**
+ * 从 GitHub 获取 README
+ * @param {Object} repo - 项目信息
+ * @returns {String} - README 内容
+ */
+async function fetchReadmeFromGitHub(repo) {
+  const headers = buildHeaders();
+  const response = await axios.get(
+    `https://api.github.com/repos/${repo.author}/${repo.name}/readme`,
+    addProxyToConfig({
+      headers,
+      timeout: REQUEST_TIMEOUT,
+      validateStatus: null
+    })
+  );
+
+  handleApiErrors(response);
+  validateReadme(response.data);
+
+  return response.data;
+}
+
+/**
+ * 判断是否应该停止重试
+ * @param {Error} error - 错误对象
+ * @param {Number} attempt - 当前尝试次数
+ * @returns {Boolean} - 是否停止重试
+ */
+function shouldStopRetrying(error, attempt) {
+  return error.message.includes('rate limit') || attempt === MAX_RETRIES;
+}
+
+/**
+ * 等待后重试
+ * @param {Number} attempt - 当前尝试次数
+ * @param {Object} repo - 项目信息
+ */
+async function waitBeforeRetry(attempt, repo) {
+  const waitTime = Math.min(INITIAL_WAIT_TIME * Math.pow(2, attempt - 1), MAX_WAIT_TIME);
+  console.log(`Retry ${attempt}/${MAX_RETRIES} for ${repo.author}/${repo.name} after ${waitTime}ms...`);
+  await new Promise(resolve => setTimeout(resolve, waitTime));
+}
+
+/**
+ * 从 GitHub 下载原生 README.md（带重试）
  * @param {Object} repo - 项目信息
  * @returns {String} - README 内容
  */
 async function downloadReadme(repo) {
-  const maxRetries = 3;
   let lastError;
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const headers = {
-        'Accept': 'application/vnd.github.v3.raw',
-        'User-Agent': 'GitHub-Trending-App',
-      };
-
-      if (process.env.GITHUB_TOKEN) {
-        headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
-      }
-
-      const response = await axios.get(`https://api.github.com/repos/${repo.author}/${repo.name}/readme`, addProxyToConfig({
-        headers,
-        timeout: 30000,
-        validateStatus: null // 允许所有状态码，手动处理
-      }));
-
-      // 检查速率限制
-      if (response.status === 403) {
-        const rateLimitRemaining = response.headers['x-ratelimit-remaining'];
-        const rateLimitReset = response.headers['x-ratelimit-reset'];
-
-        if (rateLimitRemaining === '0') {
-          const resetTime = new Date(parseInt(rateLimitReset) * 1000);
-          const waitMinutes = Math.ceil((resetTime - new Date()) / 60000);
-          throw new Error(`GitHub API rate limit exceeded. Resets in ${waitMinutes} minutes. Consider adding GITHUB_TOKEN to .env file.`);
-        }
-        throw new Error(`GitHub API access forbidden. Check your GITHUB_TOKEN.`);
-      }
-
-      if (response.status !== 200) {
-        if (response.status === 404) {
-          throw new Error(`README not found (repository may not have a README file)`);
-        } else if (response.status === 401) {
-          throw new Error(`Authentication failed (check GITHUB_TOKEN)`);
-        } else {
-          throw new Error(`Failed to fetch README: HTTP ${response.status}`);
-        }
-      }
-
-      const readme = response.data;
-
-      if (!readme || readme.trim().length === 0) {
-        throw new Error(`README file is empty`);
-      }
-
-      return readme;
+      return await fetchReadmeFromGitHub(repo);
     } catch (error) {
       lastError = error;
 
-      // 如果是速率限制错误，不重试
-      if (error.message.includes('rate limit')) {
+      if (shouldStopRetrying(error, attempt)) {
+        if (attempt === MAX_RETRIES) {
+          console.error(`Error downloading README for ${repo.author}/${repo.name} after ${MAX_RETRIES} attempts:`, error.message);
+        }
         throw error;
       }
 
-      // 如果是最后一次尝试，抛出错误
-      if (attempt === maxRetries) {
-        console.error(`Error downloading README for ${repo.author}/${repo.name} after ${maxRetries} attempts:`, error.message);
-        throw error;
-      }
-
-      // 等待后重试（指数退避）
-      const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-      console.log(`Retry ${attempt}/${maxRetries} for ${repo.author}/${repo.name} after ${waitTime}ms...`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+      await waitBeforeRetry(attempt, repo);
     }
   }
 
@@ -95,8 +181,13 @@ async function reportExists(filename) {
     const filePath = path.join(REPORTS_DIR, filename);
     await fs.access(filePath);
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    // 区分文件不存在和其他错误
+    if (error.code === 'ENOENT') {
+      return false;
+    }
+    // 重新抛出权限错误等
+    throw error;
   }
 }
 
@@ -107,7 +198,10 @@ async function reportExists(filename) {
  * @returns {Object} - 包含文件路径和是否跳过的信息
  */
 async function downloadAndSaveReadme(repo, skipIfExists = false) {
-  const filename = `${repo.author}_${repo.name}.md`;
+  // 清理文件名以防止路径遍历
+  const sanitizedAuthor = sanitizeFilename(repo.author);
+  const sanitizedName = sanitizeFilename(repo.name);
+  const filename = `${sanitizedAuthor}_${sanitizedName}.md`;
 
   // 检查文件是否已存在
   if (skipIfExists && await reportExists(filename)) {

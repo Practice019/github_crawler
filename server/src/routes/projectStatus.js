@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
+const { body, param, validationResult } = require('express-validator');
 const fs = require('fs').promises;
 const path = require('path');
+const crypto = require('crypto');
 
 const STATUS_FILE = path.join(__dirname, '..', '..', '..', 'introductions', '.status.json');
 
@@ -58,8 +60,21 @@ router.get('/', async (req, res) => {
 });
 
 // PUT /api/project-status/:id - 更新项目状态
-router.put('/:id', async (req, res) => {
+router.put('/:id', [
+  param('id').trim().isLength({ min: 1, max: 200 }).matches(/^[a-zA-Z0-9_.-]+$/),
+  body('status').trim().isLength({ min: 1, max: 100 })
+], async (req, res) => {
   try {
+    // 验证输入
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        error: '无效的输入参数',
+        details: errors.array()
+      });
+    }
+
     const { id } = req.params;
     const { status: newStatus } = req.body;
 
@@ -85,27 +100,33 @@ router.put('/:id', async (req, res) => {
     console.error('更新状态失败:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: '更新状态失败'
     });
   }
 });
 
 // POST /api/project-status/tags - 创建新标签
-router.post('/tags', async (req, res) => {
+router.post('/tags', [
+  body('label').trim().isLength({ min: 1, max: 50 }),
+  body('color').trim().matches(/^#[0-9a-fA-F]{6}$/)
+], async (req, res) => {
   try {
-    const { label, color } = req.body;
-
-    if (!label || !color) {
+    // 验证输入
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
       return res.status(400).json({
         success: false,
-        error: '标签名称和颜色不能为空'
+        error: '无效的输入参数',
+        details: errors.array()
       });
     }
 
+    const { label, color } = req.body;
+
     const data = await readStatus();
 
-    // 生成唯一 ID
-    const id = `tag_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    // 使用加密安全的随机数生成 ID
+    const id = `tag_${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
 
     const newTag = { id, label, color };
     data.tags.push(newTag);
@@ -120,7 +141,7 @@ router.post('/tags', async (req, res) => {
     console.error('创建标签失败:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: '创建标签失败'
     });
   }
 });
@@ -167,17 +188,24 @@ router.delete('/tags/:tagId', async (req, res) => {
 });
 
 // PUT /api/project-status/tags/:tagId - 重命名标签
-router.put('/tags/:tagId', async (req, res) => {
+router.put('/tags/:tagId', [
+  param('tagId').trim().isLength({ min: 1, max: 100 }),
+  body('label').trim().isLength({ min: 1, max: 50 }),
+  body('color').optional().trim().matches(/^#[0-9a-fA-F]{6}$/)
+], async (req, res) => {
   try {
-    const { tagId } = req.params;
-    const { label, color } = req.body;
-
-    if (!label) {
+    // 验证输入
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
       return res.status(400).json({
         success: false,
-        error: '标签名称不能为空'
+        error: '无效的输入参数',
+        details: errors.array()
       });
     }
+
+    const { tagId } = req.params;
+    const { label, color } = req.body;
 
     const data = await readStatus();
 
@@ -214,7 +242,7 @@ router.put('/tags/:tagId', async (req, res) => {
     console.error('重命名标签失败:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: '重命名标签失败'
     });
   }
 });
@@ -289,18 +317,23 @@ router.get('/notes/:projectId', async (req, res) => {
 });
 
 // PUT /api/project-status/notes/:projectId - 创建/更新项目备注
-router.put('/notes/:projectId', async (req, res) => {
+router.put('/notes/:projectId', [
+  param('projectId').trim().isLength({ min: 1, max: 200 }).matches(/^[a-zA-Z0-9_.-]+$/),
+  body('content').trim().isLength({ min: 0, max: 5000 })
+], async (req, res) => {
   try {
-    const { projectId } = req.params;
-    const { content } = req.body;
-
-    // 验证内容
-    if (content === undefined) {
+    // 验证输入
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
       return res.status(400).json({
         success: false,
-        error: '备注内容不能为空'
+        error: '无效的输入参数',
+        details: errors.array()
       });
     }
+
+    const { projectId } = req.params;
+    const { content } = req.body;
 
     const data = await readStatus();
 

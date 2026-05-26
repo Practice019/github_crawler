@@ -9,6 +9,7 @@ class SchedulerService {
     this.lastRun = null;
     this.lastRunStatus = null;
     this.logListeners = []; // SSE 日志监听器
+    this.fetchLock = false; // 互斥锁
   }
 
   // 添加日志监听器
@@ -56,11 +57,14 @@ class SchedulerService {
   }
 
   async fetchAllData() {
-    if (this.isRunning) {
+    // 使用互斥锁防止并发执行
+    if (this.fetchLock) {
       this.sendLog('warning', 'Fetch already in progress, skipping...');
       return;
     }
 
+    // 获取锁
+    this.fetchLock = true;
     this.isRunning = true;
     this.lastRun = new Date().toISOString();
     this.sendLog('info', '开始更新缓存...');
@@ -94,6 +98,7 @@ class SchedulerService {
       this.lastRunStatus = 'failed';
     } finally {
       this.isRunning = false;
+      this.fetchLock = false; // 释放锁
     }
   }
 

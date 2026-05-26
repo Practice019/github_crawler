@@ -55,44 +55,41 @@ function DocGeneratorPage() {
     }
   };
 
+  // 日志类型模式匹配
+  const LOG_TYPE_PATTERNS = {
+    error: [' - ERROR - '],
+    warning: [' - WARNING - '],
+    success: [' - SUCCESS - '],
+    separator: ['==='],
+    stats: ['总计:', '成功:', '跳过:', '失败:', '处理完成统计', '报告已保存到'],
+    skipped: ['⏭️', '已跳过'],
+    progress: ['处理进度:', '|', 'it/s']
+  };
+
+  const TYPE_MAPPING = {
+    stderr: 'info',
+    stdout: 'info',
+    exit: 'exit'
+  };
+
   // 根据日志内容判断实际类型
   const parseLogType = (originalType, message) => {
-    // 明确的日志级别标记
-    if (message.includes(' - ERROR - ')) return 'error';
-    if (message.includes(' - WARNING - ')) return 'warning';
-    if (message.includes(' - SUCCESS - ')) return 'success';
-
-    // 分隔符（=== 开头的行）- 使用特殊颜色
-    if (message.includes('===')) return 'separator';
-
-    // 统计信息（包含"总计"、"成功"、"跳过"、"失败"等）- 统一颜色
-    if (message.includes('总计:') || message.includes('成功:') ||
-        message.includes('跳过:') || message.includes('失败:') ||
-        message.includes('处理完成统计') || message.includes('报告已保存到')) {
-      return 'stats';
+    // 检查消息是否匹配任何模式
+    for (const [type, patterns] of Object.entries(LOG_TYPE_PATTERNS)) {
+      if (patterns.some(pattern => message.includes(pattern))) {
+        // 对于 progress 类型，需要同时包含 | 和 it/s
+        if (type === 'progress' && patterns.includes('|')) {
+          if (message.includes('|') && message.includes('it/s')) {
+            return type;
+          }
+          continue;
+        }
+        return type;
+      }
     }
 
-    // 跳过信息
-    if (message.includes('⏭️') || message.includes('已跳过')) {
-      return 'skipped';
-    }
-
-    // 进度条
-    if (message.includes('处理进度:') || (message.includes('|') && message.includes('it/s'))) {
-      return 'progress';
-    }
-
-    // 对于 stderr 类型，如果不是明确的错误，转换为 info
-    if (originalType === 'stderr') return 'info';
-
-    // 对于 stdout 和其他类型，也转换为 info
-    if (originalType === 'stdout') return 'info';
-
-    // exit 类型保持不变
-    if (originalType === 'exit') return 'exit';
-
-    // 其他情况使用原始类型
-    return originalType;
+    // 使用类型映射
+    return TYPE_MAPPING[originalType] || originalType;
   };
 
   // 连接到日志流

@@ -34,8 +34,9 @@ except ImportError:
 # 加载环境变量
 load_dotenv()
 
-# 配置日志
-log_dir = Path("D:/test/31/introductions")
+# 配置日志 - 使用相对路径
+project_root = Path(__file__).parent.parent
+log_dir = project_root / "introductions"
 log_dir.mkdir(parents=True, exist_ok=True)
 
 logging.basicConfig(
@@ -84,14 +85,18 @@ class SimpleDocumentGenerator:
         api_base = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1")
         self.model = os.getenv("OPENAI_MODEL", "claude-haiku-4-5-20251001")
 
-        # 设置更长的超时时间，并禁用代理
+        # 设置更长的超时时间，并根据环境变量配置代理
         import httpx
+
+        # 只在明确禁用时才不使用代理
+        proxy = None if os.getenv("NO_PROXY", "").lower() == "true" else os.getenv("HTTP_PROXY")
+
         self.client = AsyncOpenAI(
             api_key=api_key,
             base_url=api_base,
             timeout=httpx.Timeout(120.0, connect=10.0),  # 总超时120秒，连接超时10秒
             max_retries=2,  # 最多重试2次
-            http_client=httpx.AsyncClient(proxy=None)  # 禁用代理
+            http_client=httpx.AsyncClient(proxy=proxy)  # 根据环境变量配置代理
         )
 
         # 文档生成提示词
@@ -140,105 +145,125 @@ class SimpleDocumentGenerator:
 现在开始生成项目介绍文章。
 """
 
+    def should_skip(self, intro_file: Path) -> bool:
+        """检查是否应该跳过"""
+        if intro_file.exists():
+            logger.info(f"跳过已存在的项目: {intro_file.parent.name}")
+            return True
+        return False
+
+    def read_source_file(self, file_path: Path) -> str:
+        """读取源文件"""
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return f.read()
+
+    def build_github_url(self, project_name: str) -> str:
+        """构建 GitHub URL"""
+        parts = project_name.split('_', 1)
+        if len(parts) == 2:
+            owner, repo = parts
+            return f"https://github.com/{owner}/{repo}"
+        return f"项目名称格式异常: {project_name}"
+
+    async def generate_introduction(self, project_name: str, source_content: str) -> str:
+        """生成项目介绍"""
+        user_prompt = f"项目名称: {project_name}\n\n原始文档内容:\n{source_content}"
+        logger.info(f"准备请求 API，内容长度: {len(user_prompt)} 字符")
+
+        response = await self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            temperature=0.7,
+            max_tokens=2500,
+            stream=False
+        )
+
+        logger.info("API 请求成功")
+        return self.extract_content(response)
+
+    def extract_content(self, response) -> str:
+        """提取响应内容"""
+        if hasattr(response, 'choices'):
+            return response.choices[0].message.content
+        if isinstance(response, str):
+            return response
+        if isinstance(response, dict):
+            return response.get('content') or response.get('text') or str(response)
+        return str(response)
+
+    def save_project_files(self, project_folder: Path, intro_content: str, github_url: str):
+        """保存项目文件"""
+        intro_file = project_folder / "项目介绍.md"
+        with open(intro_file, 'w', encoding='utf-8') as f:
+            f.write(intro_content)
+
+        github_link_file = project_folder / "项目链接.md"
+        github_content = f"# GitHub 链接\n\n{github_url}\n"
+        with open(github_link_file, 'w', encoding='utf-8') as f:
+            f.write(github_content)
+
+    def create_skip_result(self, file_path: Path) -> Dict:
+        """创建跳过结果"""
+        return {
+            "file": file_path.name,
+            "status": "skipped",
+            "message": "文件已存在"
+        }
+
+    def create_success_result(self, file_path: Path, project_name: str, github_url: str) -> Dict:
+        """创建成功结果"""
+        return {
+            "file": file_path.name,
+            "status": "success",
+            "output": f"{project_name}/",
+            "github_url": github_url,
+            "message": "生成成功"
+        }
+
+    def create_error_result(self, file_path: Path, error: Exception) -> Dict:
+        """创建错误结果"""
+        error_type = type(error).__name__
+        error_msg = str(error)
+        logger.error(f"处理文件失败 {file_path.name}: [{error_type}] {error_msg}")
+
+        if hasattr(error, 'response'):
+            logger.error(f"API 响应状态: {getattr(error.response, 'status_code', 'unknown')}")
+            logger.error(f"API 响应内容: {getattr(error.response, 'text', 'unknown')}")
+
+        return {
+            "file": file_path.name,
+            "status": "failed",
+            "error_type": error_type,
+            "message": error_msg
+        }
+
     @retry(max_attempts=3, delay=2)
     async def process_file(self, file_path: Path) -> Dict:
         """处理单个文件"""
         project_name = file_path.stem
-
-        # 创建项目文件夹
         project_folder = self.output_dir / project_name
         project_folder.mkdir(parents=True, exist_ok=True)
 
-        # 定义输出文件路径
         intro_file = project_folder / "项目介绍.md"
-        github_link_file = project_folder / "项目链接.md"
 
-        # 检查输出文件是否已存在
-        if intro_file.exists():
-            logger.info(f"跳过已存在的项目: {project_name}")
-            return {
-                "file": file_path.name,
-                "status": "skipped",
-                "message": "文件已存在"
-            }
+        if self.should_skip(intro_file):
+            return self.create_skip_result(file_path)
 
         try:
-            # 读取源文件
-            with open(file_path, 'r', encoding='utf-8') as f:
-                source_content = f.read()
+            source_content = self.read_source_file(file_path)
+            github_url = self.build_github_url(project_name)
+            intro_content = await self.generate_introduction(project_name, source_content)
 
-            # 提取GitHub链接（从项目名称构建）
-            # 项目名称格式：owner_repo
-            parts = project_name.split('_', 1)
-            if len(parts) == 2:
-                owner, repo = parts
-                github_url = f"https://github.com/{owner}/{repo}"
-            else:
-                github_url = f"项目名称格式异常: {project_name}"
-
-            # 调用 OpenAI API 生成文档
-            user_prompt = f"项目名称: {project_name}\n\n原始文档内容:\n{source_content}"
-
-            logger.info(f"准备请求 API，内容长度: {len(user_prompt)} 字符")
-
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                temperature=0.7,
-                max_tokens=2500,  # 800-1200字约需2000-2500 tokens
-                stream=False  # 关闭流式输出
-            )
-
-            logger.info(f"API 请求成功")
-
-            # 处理不同的响应格式
-            if hasattr(response, 'choices'):
-                result = response.choices[0].message.content
-            elif isinstance(response, str):
-                result = response
-            elif isinstance(response, dict):
-                # 尝试从字典中提取内容
-                result = response.get('content') or response.get('text') or str(response)
-            else:
-                result = str(response)
-
-            # 保存项目介绍文档
-            with open(intro_file, 'w', encoding='utf-8') as f:
-                f.write(result)
-
-            # 保存GitHub链接
-            github_content = f"# GitHub 链接\n\n{github_url}\n"
-            with open(github_link_file, 'w', encoding='utf-8') as f:
-                f.write(github_content)
+            self.save_project_files(project_folder, intro_content, github_url)
 
             logger.info(f"成功生成: {project_name}/")
-            return {
-                "file": file_path.name,
-                "status": "success",
-                "output": f"{project_name}/",
-                "github_url": github_url,
-                "message": "生成成功"
-            }
+            return self.create_success_result(file_path, project_name, github_url)
 
         except Exception as e:
-            error_type = type(e).__name__
-            error_msg = str(e)
-            logger.error(f"处理文件失败 {file_path.name}: [{error_type}] {error_msg}")
-
-            # 如果是 API 错误，记录更多信息
-            if hasattr(e, 'response'):
-                logger.error(f"API 响应状态: {getattr(e.response, 'status_code', 'unknown')}")
-                logger.error(f"API 响应内容: {getattr(e.response, 'text', 'unknown')}")
-
-            return {
-                "file": file_path.name,
-                "status": "failed",
-                "error_type": error_type,
-                "message": error_msg
-            }
+            return self.create_error_result(file_path, e)
 
     async def batch_process(self, max_concurrent: int = 5, limit: int = None) -> List[Dict]:
         """批量处理文件"""

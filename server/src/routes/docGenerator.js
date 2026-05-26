@@ -2,110 +2,214 @@ const express = require('express');
 const router = express.Router();
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
-let currentProcess = null;
-let logs = [];
-let clients = [];
+// 循环缓冲区类
+class CircularBuffer {
+  constructor(maxSize = 1000) {
+    this.maxSize = maxSize;
+    this.buffer = [];
+  }
+
+  push(item) {
+    this.buffer.push(item);
+    if (this.buffer.length > this.maxSize) {
+      this.buffer.shift();
+    }
+  }
+
+  getAll() {
+    return [...this.buffer];
+  }
+
+  clear() {
+    this.buffer = [];
+  }
+}
+
+// 进程管理器类
+class ProcessManager {
+  constructor() {
+    this.currentProcess = null;
+    this.logs = new CircularBuffer(1000);
+    this.clients = new Set();
+    this.cleanupInterval = setInterval(() => this.cleanup(), 30000); // 每30秒清理一次
+  }
+
+  cleanup() {
+    // 清理已断开的客户端
+    this.clients.forEach(client => {
+      if (client.destroyed || client.writableEnded) {
+        this.clients.delete(client);
+      }
+    });
+  }
+
+  isRunning() {
+    return this.currentProcess !== null;
+  }
+
+  addLog(logEntry) {
+    this.logs.push(logEntry);
+    this.broadcast(logEntry);
+  }
+
+  broadcast(logEntry) {
+    const data = `data: ${JSON.stringify(logEntry)}\n\n`;
+    this.clients.forEach(client => {
+      if (!client.destroyed && !client.writableEnded) {
+        try {
+          client.write(data);
+        } catch (error) {
+          console.error('Error broadcasting to client:', error.message);
+          this.clients.delete(client);
+        }
+      }
+    });
+  }
+
+  addClient(client) {
+    this.clients.add(client);
+  }
+
+  removeClient(client) {
+    this.clients.delete(client);
+  }
+
+  getLogs() {
+    return this.logs.getAll();
+  }
+
+  clearLogs() {
+    this.logs.clear();
+  }
+
+  setProcess(process) {
+    this.currentProcess = process;
+  }
+
+  killProcess(signal = 'SIGTERM') {
+    if (this.currentProcess) {
+      this.currentProcess.kill(signal);
+    }
+  }
+
+  clearProcess() {
+    this.currentProcess = null;
+  }
+
+  destroy() {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+    }
+    this.clients.clear();
+  }
+}
+
+// 创建单例进程管理器
+const processManager = new ProcessManager();
+
+// 验证 Python 脚本路径
+function validatePythonScript() {
+  const pythonScript = path.resolve(__dirname, '..', '..', '..', 'doc_generator', 'main.py');
+
+  if (!fs.existsSync(pythonScript)) {
+    throw new Error('Python 脚本不存在');
+  }
+
+  // 确保路径在预期目录内
+  const expectedDir = path.resolve(__dirname, '..', '..', '..');
+  if (!pythonScript.startsWith(expectedDir)) {
+    throw new Error('Python 脚本路径无效');
+  }
+
+  return pythonScript;
+}
 
 // POST /api/doc-generator/run - 启动文档生成程序
 router.post('/run', (req, res) => {
   // 如果已有进程在运行，返回错误
-  if (currentProcess) {
+  if (processManager.isRunning()) {
     return res.status(400).json({
       success: false,
       error: '文档生成程序正在运行中'
     });
   }
 
-  // 清空之前的日志
-  logs = [];
+  try {
+    // 验证 Python 脚本
+    const pythonScript = validatePythonScript();
+    const workingDir = path.resolve(__dirname, '..', '..', '..');
 
-  const pythonScript = path.join(__dirname, '..', '..', '..', 'doc_generator', 'main.py');
-  const workingDir = path.join(__dirname, '..', '..', '..');
+    // 清空之前的日志
+    processManager.clearLogs();
 
-  console.log(`Starting Python script: ${pythonScript}`);
-  console.log(`Working directory: ${workingDir}`);
+    console.log(`Starting Python script: ${pythonScript}`);
+    console.log(`Working directory: ${workingDir}`);
 
-  // 启动 Python 进程
-  currentProcess = spawn('python', [pythonScript], {
-    cwd: workingDir,
-    env: {
-      ...process.env,
-      PYTHONIOENCODING: 'utf-8',
-      PYTHONUNBUFFERED: '1'
-    }
-  });
-
-  // 监听标准输出
-  currentProcess.stdout.setEncoding('utf8');
-  currentProcess.stdout.on('data', (data) => {
-    const message = data.toString();
-    const timestamp = new Date().toISOString();
-    console.log(`[Python stdout]: ${message}`);
-
-    const logEntry = { type: 'stdout', message, timestamp };
-    logs.push(logEntry);
-
-    // 广播给所有连接的客户端
-    clients.forEach(client => {
-      client.write(`data: ${JSON.stringify(logEntry)}\n\n`);
-    });
-  });
-
-  // 监听标准错误
-  currentProcess.stderr.setEncoding('utf8');
-  currentProcess.stderr.on('data', (data) => {
-    const message = data.toString();
-    const timestamp = new Date().toISOString();
-    console.error(`[Python stderr]: ${message}`);
-
-    const logEntry = { type: 'stderr', message, timestamp };
-    logs.push(logEntry);
-
-    // 广播给所有连接的客户端
-    clients.forEach(client => {
-      client.write(`data: ${JSON.stringify(logEntry)}\n\n`);
-    });
-  });
-
-  // 监听进程退出
-  currentProcess.on('close', (code) => {
-    const message = `进程退出，退出码: ${code}`;
-    const timestamp = new Date().toISOString();
-    console.log(message);
-
-    const logEntry = { type: 'exit', message, code, timestamp };
-    logs.push(logEntry);
-
-    // 广播给所有连接的客户端
-    clients.forEach(client => {
-      client.write(`data: ${JSON.stringify(logEntry)}\n\n`);
+    // 启动 Python 进程
+    const childProcess = spawn('python', [pythonScript], {
+      cwd: workingDir,
+      env: {
+        ...process.env,
+        PYTHONIOENCODING: 'utf-8',
+        PYTHONUNBUFFERED: '1'
+      }
     });
 
-    currentProcess = null;
-  });
+    processManager.setProcess(childProcess);
 
-  // 监听错误
-  currentProcess.on('error', (error) => {
-    const message = `启动进程失败: ${error.message}`;
-    const timestamp = new Date().toISOString();
-    console.error(message);
+    // 监听标准输出
+    childProcess.stdout.setEncoding('utf8');
+    childProcess.stdout.on('data', (data) => {
+      const message = data.toString();
+      const timestamp = new Date().toISOString();
+      console.log(`[Python stdout]: ${message}`);
 
-    const logEntry = { type: 'error', message, timestamp };
-    logs.push(logEntry);
-
-    // 广播给所有连接的客户端
-    clients.forEach(client => {
-      client.write(`data: ${JSON.stringify(logEntry)}\n\n`);
+      processManager.addLog({ type: 'stdout', message, timestamp });
     });
 
-    currentProcess = null;
-  });
+    // 监听标准错误
+    childProcess.stderr.setEncoding('utf8');
+    childProcess.stderr.on('data', (data) => {
+      const message = data.toString();
+      const timestamp = new Date().toISOString();
+      console.error(`[Python stderr]: ${message}`);
 
-  res.json({
-    success: true,
-    message: '文档生成程序已启动'
-  });
+      processManager.addLog({ type: 'stderr', message, timestamp });
+    });
+
+    // 监听进程退出
+    childProcess.on('close', (code) => {
+      const message = `进程退出，退出码: ${code}`;
+      const timestamp = new Date().toISOString();
+      console.log(message);
+
+      processManager.addLog({ type: 'exit', message, code, timestamp });
+      processManager.clearProcess();
+    });
+
+    // 监听错误
+    childProcess.on('error', (error) => {
+      const message = `启动进程失败: ${error.message}`;
+      const timestamp = new Date().toISOString();
+      console.error(message);
+
+      processManager.addLog({ type: 'error', message, timestamp });
+      processManager.clearProcess();
+    });
+
+    res.json({
+      success: true,
+      message: '文档生成程序已启动'
+    });
+  } catch (error) {
+    console.error('Failed to start process:', error);
+    res.status(500).json({
+      success: false,
+      error: '启动失败'
+    });
+  }
 });
 
 // GET /api/doc-generator/logs - SSE 日志流
@@ -116,16 +220,17 @@ router.get('/logs', (req, res) => {
   res.setHeader('Connection', 'keep-alive');
 
   // 发送历史日志
+  const logs = processManager.getLogs();
   logs.forEach(log => {
     res.write(`data: ${JSON.stringify(log)}\n\n`);
   });
 
-  // 添加客户端到列表
-  clients.push(res);
+  // 添加客户端到管理器
+  processManager.addClient(res);
 
   // 客户端断开连接时移除
   req.on('close', () => {
-    clients = clients.filter(client => client !== res);
+    processManager.removeClient(res);
   });
 });
 
@@ -133,21 +238,30 @@ router.get('/logs', (req, res) => {
 router.get('/status', (req, res) => {
   res.json({
     success: true,
-    running: !!currentProcess,
-    logCount: logs.length
+    running: processManager.isRunning(),
+    logCount: processManager.getLogs().length
   });
 });
 
 // POST /api/doc-generator/stop - 停止运行
 router.post('/stop', (req, res) => {
-  if (!currentProcess) {
+  if (!processManager.isRunning()) {
     return res.status(400).json({
       success: false,
       error: '没有正在运行的进程'
     });
   }
 
-  currentProcess.kill();
+  // 先发送 SIGTERM
+  processManager.killProcess('SIGTERM');
+
+  // 5秒后如果还在运行，发送 SIGKILL
+  setTimeout(() => {
+    if (processManager.isRunning()) {
+      console.log('Process did not respond to SIGTERM, sending SIGKILL');
+      processManager.killProcess('SIGKILL');
+    }
+  }, 5000);
 
   res.json({
     success: true,

@@ -1,9 +1,33 @@
 const express = require('express');
 const router = express.Router();
-const fs = require('fs');
+const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
 
 const INTRODUCTIONS_DIR = path.join(__dirname, '..', '..', '..', 'introductions');
+
+/**
+ * 验证和清理路径参数
+ * @param {String} id - 用户提供的 ID
+ * @returns {String} - 验证后的安全路径
+ * @throws {Error} - 如果路径无效
+ */
+function validateAndSanitizePath(id) {
+  // 验证 ID 格式 - 只允许字母、数字、下划线、连字符（不允许点号）
+  if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
+    throw new Error('无效的项目ID格式');
+  }
+
+  // 构建完整路径
+  const projectPath = path.resolve(INTRODUCTIONS_DIR, id);
+
+  // 确保路径在预期目录内
+  if (!projectPath.startsWith(path.resolve(INTRODUCTIONS_DIR) + path.sep)) {
+    throw new Error('无效的项目路径');
+  }
+
+  return projectPath;
+}
 
 /**
  * 从项目介绍.md中提取项目名称
@@ -11,82 +35,75 @@ const INTRODUCTIONS_DIR = path.join(__dirname, '..', '..', '..', 'introductions'
  * @param {String} dirName - 目录名（格式：作者_项目名）
  */
 function extractProjectName(content, dirName) {
-  // 从目录名中提取项目名（下划线后面的部分）
-  const projectName = dirName.includes('_') ? dirName.split('_')[1] : dirName;
+  const projectName = dirName.split('_')[1] || dirName;
 
-  // 在 Markdown 中查找包含项目名的标题（不区分大小写）
-  const lines = content.split('\n');
-  for (let line of lines) {
-    if (line.startsWith('#')) {
-      const title = line.replace(/^#+\s*/, '').trim();
-      // 检查标题是否包含项目名（不区分大小写）
-      if (title.toLowerCase().includes(projectName.toLowerCase())) {
-        return title;
-      }
-    }
-  }
+  const headings = content
+    .split('\n')
+    .filter(line => line.startsWith('#'))
+    .map(line => line.replace(/^#+\s*/, '').trim());
 
-  // 如果没找到匹配的标题，返回目录名
-  return dirName;
+  return headings.find(heading =>
+    heading.toLowerCase().includes(projectName.toLowerCase())
+  ) || dirName;
 }
 
 /**
  * 从项目介绍.md中提取摘要（第一段文本）
  */
 function extractSummary(content) {
-  const lines = content.split('\n');
-  for (let line of lines) {
-    line = line.trim();
-    if (line && !line.startsWith('#') && !line.startsWith('```')) {
-      return line.length > 150 ? line.substring(0, 150) + '...' : line;
-    }
+  const MAX_SUMMARY_LENGTH = 150;
+
+  const firstParagraph = content
+    .split('\n')
+    .map(line => line.trim())
+    .find(line => line && !line.startsWith('#') && !line.startsWith('```'));
+
+  if (!firstParagraph) {
+    return '暂无摘要';
   }
-  return '暂无摘要';
+
+  return firstParagraph.length > MAX_SUMMARY_LENGTH
+    ? firstParagraph.substring(0, MAX_SUMMARY_LENGTH) + '...'
+    : firstParagraph;
 }
 
 /**
  * 从项目介绍.md中提取项目概述部分
  */
 function extractOverview(content) {
-  // 查找"项目概述"部分（支持二级或三级标题）
-  const lines = content.split('\n');
-  let inOverview = false;
-  let overview = [];
+  const OVERVIEW_HEADING_PATTERN = /^#{2,3}\s*项目概述/i;
+  const MAX_OVERVIEW_LENGTH = 300;
+  const MIN_OVERVIEW_LENGTH = 50;
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
+  const lines = content.split('\n').map(l => l.trim());
+  const overviewStart = lines.findIndex(line => OVERVIEW_HEADING_PATTERN.test(line));
 
-    // 检测是否进入项目概述部分（支持 ## 或 ### 标题）
-    if (line.match(/^#{2,3}\s*项目概述/i)) {
-      inOverview = true;
-      continue;
-    }
+  if (overviewStart === -1) {
+    return extractSummary(content);
+  }
 
-    // 如果遇到下一个同级或更高级标题，停止收集
-    if (inOverview && line.match(/^#{1,3}\s+/)) {
-      break;
-    }
+  const overviewLines = [];
+  for (let i = overviewStart + 1; i < lines.length; i++) {
+    const line = lines[i];
 
-    // 收集概述内容（跳过空行和分隔符）
-    if (inOverview && line && line !== '---') {
-      overview.push(line);
-      // 限制概述长度，最多收集到300字
-      if (overview.join(' ').length > 300) {
-        break;
-      }
+    // 遇到下一个标题，停止收集
+    if (line.match(/^#{1,3}\s+/)) break;
+
+    // 收集有效内容
+    if (line && line !== '---') {
+      overviewLines.push(line);
+      if (overviewLines.join(' ').length > MAX_OVERVIEW_LENGTH) break;
     }
   }
 
-  const overviewText = overview.join(' ').trim();
+  const overviewText = overviewLines.join(' ').trim();
 
-  // 如果找到了概述内容，返回它（限制在300字以内）
-  if (overviewText && overviewText.length > 50) {
-    return overviewText.length > 300
-      ? overviewText.substring(0, 300) + '...'
+  if (overviewText.length > MIN_OVERVIEW_LENGTH) {
+    return overviewText.length > MAX_OVERVIEW_LENGTH
+      ? overviewText.substring(0, MAX_OVERVIEW_LENGTH) + '...'
       : overviewText;
   }
 
-  // 如果没找到项目概述，使用第一段有效内容
   return extractSummary(content);
 }
 
@@ -99,47 +116,66 @@ function extractGithubLink(content) {
 }
 
 // GET /api/introductions - 获取所有项目介绍列表
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    if (!fs.existsSync(INTRODUCTIONS_DIR)) {
+    // 检查目录是否存在
+    try {
+      await fs.access(INTRODUCTIONS_DIR);
+    } catch (error) {
       return res.json({ success: true, data: [] });
     }
 
     const projects = [];
-    const dirs = fs.readdirSync(INTRODUCTIONS_DIR);
+    const dirs = await fs.readdir(INTRODUCTIONS_DIR);
 
     for (const dir of dirs) {
-      const projectPath = path.join(INTRODUCTIONS_DIR, dir);
-      const stat = fs.statSync(projectPath);
+      try {
+        const projectPath = path.join(INTRODUCTIONS_DIR, dir);
+        const stat = await fs.stat(projectPath);
 
-      if (!stat.isDirectory()) continue;
+        if (!stat.isDirectory()) continue;
 
-      const introFile = path.join(projectPath, '项目介绍.md');
-      const linkFile = path.join(projectPath, '项目链接.md');
+        const introFile = path.join(projectPath, '项目介绍.md');
+        const linkFile = path.join(projectPath, '项目链接.md');
 
-      // 只显示同时有两个文件的项目
-      if (fs.existsSync(introFile) && fs.existsSync(linkFile)) {
-        const introContent = fs.readFileSync(introFile, 'utf-8');
-        const linkContent = fs.readFileSync(linkFile, 'utf-8');
+        // 检查文件是否存在
+        const [introExists, linkExists] = await Promise.all([
+          fs.access(introFile).then(() => true).catch(() => false),
+          fs.access(linkFile).then(() => true).catch(() => false)
+        ]);
 
-        const name = extractProjectName(introContent, dir);
-        const summary = extractSummary(introContent);
-        const overview = extractOverview(introContent);
-        const githubLink = extractGithubLink(linkContent);
+        // 只显示同时有两个文件的项目
+        if (introExists && linkExists) {
+          const [introContent, linkContent] = await Promise.all([
+            fs.readFile(introFile, 'utf-8'),
+            fs.readFile(linkFile, 'utf-8')
+          ]);
 
-        projects.push({
-          id: dir,
-          name,
-          summary,
-          overview,
-          githubLink,
-          createdAt: stat.birthtime
-        });
+          const name = extractProjectName(introContent, dir);
+          const summary = extractSummary(introContent);
+          const overview = extractOverview(introContent);
+          const githubLink = extractGithubLink(linkContent);
+
+          projects.push({
+            id: dir,
+            name,
+            summary,
+            overview,
+            githubLink,
+            createdAt: stat.birthtime
+          });
+        }
+      } catch (error) {
+        console.error(`Error processing project ${dir}:`, error.message);
+        // 继续处理其他项目
+        continue;
       }
     }
 
     // 按创建时间倒序排序
     projects.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    console.log(`📊 Total projects found: ${projects.length}`);
 
     res.json({
       success: true,
@@ -149,18 +185,31 @@ router.get('/', (req, res) => {
     console.error('Error fetching introductions:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: '获取项目列表失败'
     });
   }
 });
 
 // GET /api/introductions/:id - 获取单个项目介绍详情
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const projectPath = path.join(INTRODUCTIONS_DIR, id);
 
-    if (!fs.existsSync(projectPath)) {
+    // 验证和清理路径
+    let projectPath;
+    try {
+      projectPath = validateAndSanitizePath(id);
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        error: error.message
+      });
+    }
+
+    // 检查项目目录是否存在
+    try {
+      await fs.access(projectPath);
+    } catch (error) {
       return res.status(404).json({
         success: false,
         error: '项目不存在'
@@ -170,15 +219,24 @@ router.get('/:id', (req, res) => {
     const introFile = path.join(projectPath, '项目介绍.md');
     const linkFile = path.join(projectPath, '项目链接.md');
 
-    if (!fs.existsSync(introFile) || !fs.existsSync(linkFile)) {
+    // 检查文件是否存在
+    const [introExists, linkExists] = await Promise.all([
+      fs.access(introFile).then(() => true).catch(() => false),
+      fs.access(linkFile).then(() => true).catch(() => false)
+    ]);
+
+    if (!introExists || !linkExists) {
       return res.status(404).json({
         success: false,
         error: '项目文件不完整'
       });
     }
 
-    const introContent = fs.readFileSync(introFile, 'utf-8');
-    const linkContent = fs.readFileSync(linkFile, 'utf-8');
+    // 读取文件内容
+    const [introContent, linkContent] = await Promise.all([
+      fs.readFile(introFile, 'utf-8'),
+      fs.readFile(linkFile, 'utf-8')
+    ]);
 
     const name = extractProjectName(introContent, id);
     const githubLink = extractGithubLink(linkContent);
@@ -196,7 +254,7 @@ router.get('/:id', (req, res) => {
     console.error('Error fetching introduction detail:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: '获取项目详情失败'
     });
   }
 });

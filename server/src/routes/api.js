@@ -1,76 +1,76 @@
 const express = require('express');
 const router = express.Router();
+const { body, validationResult } = require('express-validator');
 const githubService = require('../services/githubService');
 const cache = require('../services/cacheService');
 const reportGenerator = require('../services/reportGenerator');
 const scheduler = require('../services/scheduler');
 const { cacheControl, noCache } = require('../middleware/cacheMiddleware');
 
-// GET /api/trending - 获取trending项目（缓存 1 年）
-router.get('/trending', cacheControl(31536000), async (req, res) => {
+/**
+ * 合并所有时间范围的仓库数据
+ */
+function mergeAllTimeRanges(lang) {
+  const allRepos = new Map();
+  const timeRanges = ['daily', 'weekly', 'monthly'];
+
+  for (const timeRange of timeRanges) {
+    const cacheKey = `trending:${lang}:${timeRange}`;
+    const repos = cache.get(cacheKey) || [];
+
+    repos.forEach(repo => {
+      const existing = allRepos.get(repo.id);
+      if (!existing || repo.todayStars > (existing.todayStars || 0)) {
+        allRepos.set(repo.id, repo);
+      }
+    });
+  }
+
+  const mergedRepos = Array.from(allRepos.values());
+  mergedRepos.sort((a, b) => (b.stars || 0) - (a.stars || 0));
+
+  console.log(`Merged ${mergedRepos.length} repos from all time ranges`);
+  return mergedRepos;
+}
+
+/**
+ * 获取单个时间范围的仓库数据
+ */
+async function fetchSingleTimeRange(lang, since) {
+  const cacheKey = `trending:${lang}:${since}`;
+  let repos = cache.get(cacheKey);
+
+  if (!repos || repos.length === 0) {
+    console.log(`Cache miss for ${cacheKey}, fetching from GitHub...`);
+    repos = await githubService.fetchTrendingRepos(lang, since);
+    if (repos && repos.length > 0) {
+      cache.set(cacheKey, repos);
+    }
+  } else {
+    console.log(`Cache hit for ${cacheKey}, returning ${repos.length} repos`);
+  }
+
+  return repos || [];
+}
+
+/**
+ * 处理 trending 请求的通用函数
+ */
+async function handleTrendingRequest(req, res) {
   try {
     const { since = 'weekly', language = '' } = req.query;
-
-    // 构建缓存键 - 空字符串表示全部语言
     const lang = language || 'all';
 
-    console.log(`API Request: /api/trending?since=${since}&language=${language} -> cache key: ${lang}`);
+    console.log(`API Request: ${req.path}?since=${since}&language=${language}`);
 
-    // 如果选择"全部"，合并所有时间范围的数据
-    if (since === 'all') {
-      const allRepos = new Map(); // 使用 Map 去重
-
-      for (const timeRange of ['daily', 'weekly', 'monthly']) {
-        const cacheKey = `trending:${lang}:${timeRange}`;
-        const repos = cache.get(cacheKey);
-
-        if (repos && repos.length > 0) {
-          repos.forEach(repo => {
-            // 使用项目 ID 去重，保留最新的数据
-            if (!allRepos.has(repo.id) || repo.todayStars > (allRepos.get(repo.id).todayStars || 0)) {
-              allRepos.set(repo.id, repo);
-            }
-          });
-        }
-      }
-
-      const mergedRepos = Array.from(allRepos.values());
-      // 按 stars 排序
-      mergedRepos.sort((a, b) => (b.stars || 0) - (a.stars || 0));
-
-      console.log(`Merged ${mergedRepos.length} repos from all time ranges`);
-
-      return res.json({
-        success: true,
-        data: mergedRepos,
-        cached: true,
-        since: 'all',
-        language: lang
-      });
-    }
-
-    // 单个时间范围的逻辑
-    const cacheKey = `trending:${lang}:${since}`;
-    console.log(`Cache key: ${cacheKey}`);
-
-    // 尝试从缓存获取
-    let repos = cache.get(cacheKey);
-
-    if (!repos || repos.length === 0) {
-      console.log(`Cache miss for ${cacheKey}, fetching from GitHub...`);
-      // 缓存未命中，实时爬取
-      repos = await githubService.fetchTrendingRepos(lang, since);
-      if (repos && repos.length > 0) {
-        cache.set(cacheKey, repos);
-      }
-    } else {
-      console.log(`Cache hit for ${cacheKey}, returning ${repos.length} repos`);
-    }
+    const repos = since === 'all'
+      ? mergeAllTimeRanges(lang)
+      : await fetchSingleTimeRange(lang, since);
 
     res.json({
       success: true,
-      data: repos || [],
-      cached: !!cache.get(cacheKey),
+      data: repos,
+      cached: since !== 'all' && !!cache.get(`trending:${lang}:${since}`),
       since,
       language: lang
     });
@@ -78,99 +78,36 @@ router.get('/trending', cacheControl(31536000), async (req, res) => {
     console.error('Error fetching trending:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: '获取热门项目失败'
     });
   }
-});
+}
+
+// GET /api/trending - 获取trending项目（缓存 1 年）
+router.get('/trending', cacheControl(31536000), handleTrendingRequest);
 
 // GET /api/github/trending - 兼容旧路由（缓存 1 年）
-router.get('/github/trending', cacheControl(31536000), async (req, res) => {
-  try {
-    const { since = 'weekly', language = '' } = req.query;
-
-    // 构建缓存键 - 空字符串表示全部语言
-    const lang = language || 'all';
-
-    console.log(`API Request: /api/github/trending?since=${since}&language=${language} -> cache key: ${lang}`);
-
-    // 如果选择"全部"，合并所有时间范围的数据
-    if (since === 'all') {
-      const allRepos = new Map(); // 使用 Map 去重
-
-      for (const timeRange of ['daily', 'weekly', 'monthly']) {
-        const cacheKey = `trending:${lang}:${timeRange}`;
-        const repos = cache.get(cacheKey);
-
-        if (repos && repos.length > 0) {
-          repos.forEach(repo => {
-            // 使用项目 ID 去重，保留最新的数据
-            if (!allRepos.has(repo.id) || repo.todayStars > (allRepos.get(repo.id).todayStars || 0)) {
-              allRepos.set(repo.id, repo);
-            }
-          });
-        }
-      }
-
-      const mergedRepos = Array.from(allRepos.values());
-      // 按 stars 排序
-      mergedRepos.sort((a, b) => (b.stars || 0) - (a.stars || 0));
-
-      console.log(`Merged ${mergedRepos.length} repos from all time ranges`);
-
-      return res.json({
-        success: true,
-        data: mergedRepos,
-        cached: true,
-        since: 'all',
-        language: lang
-      });
-    }
-
-    // 单个时间范围的逻辑
-    const cacheKey = `trending:${lang}:${since}`;
-    console.log(`Cache key: ${cacheKey}`);
-
-    // 尝试从缓存获取
-    let repos = cache.get(cacheKey);
-
-    if (!repos || repos.length === 0) {
-      console.log(`Cache miss for ${cacheKey}, fetching from GitHub...`);
-      // 缓存未命中，实时爬取
-      repos = await githubService.fetchTrendingRepos(lang, since);
-      if (repos && repos.length > 0) {
-        cache.set(cacheKey, repos);
-      }
-    } else {
-      console.log(`Cache hit for ${cacheKey}, returning ${repos.length} repos`);
-    }
-
-    res.json({
-      success: true,
-      data: repos || [],
-      cached: !!cache.get(cacheKey),
-      since,
-      language: lang
-    });
-  } catch (error) {
-    console.error('Error fetching trending:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
+router.get('/github/trending', cacheControl(31536000), handleTrendingRequest);
 
 // POST /api/reports/generate - 生成项目报告（不缓存）
-router.post('/reports/generate', noCache(), async (req, res) => {
+router.post('/reports/generate', [
+  noCache(),
+  body('author').trim().isLength({ min: 1, max: 100 }).matches(/^[a-zA-Z0-9_-]+$/),
+  body('name').trim().isLength({ min: 1, max: 100 }).matches(/^[a-zA-Z0-9_.-]+$/),
+  body('skipIfExists').optional().isBoolean()
+], async (req, res) => {
   try {
-    const { author, name, skipIfExists } = req.body;
-
-    if (!author || !name) {
+    // 验证输入
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: author, name'
+        error: '无效的输入参数',
+        details: errors.array()
       });
     }
+
+    const { author, name, skipIfExists } = req.body;
 
     const result = await reportGenerator.generateReport(author, name, skipIfExists);
 
@@ -182,7 +119,7 @@ router.post('/reports/generate', noCache(), async (req, res) => {
     console.error('Error generating report:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: '生成报告失败'
     });
   }
 });
@@ -226,7 +163,7 @@ router.post('/scheduler/fetch', async (req, res) => {
     console.error('Error triggering fetch:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: '触发更新失败'
     });
   }
 });

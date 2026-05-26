@@ -1,7 +1,8 @@
 const express = require('express');
 const path = require('path');
 const cors = require('cors');
-const fs = require('fs');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const apiRoutes = require('./src/routes/api');
 const introductionsRoutes = require('./src/routes/introductions');
 const docGeneratorRoutes = require('./src/routes/docGenerator');
@@ -9,29 +10,67 @@ const projectStatusRoutes = require('./src/routes/projectStatus');
 const scheduler = require('./src/services/scheduler');
 const { performanceMonitor, memoryMonitor } = require('./src/middleware/performanceMonitor');
 
-// 手动加载 .env 文件
-const envPath = path.join(__dirname, '..', '.env');
-if (fs.existsSync(envPath)) {
-  const envContent = fs.readFileSync(envPath, 'utf-8');
-  envContent.split('\n').forEach(line => {
-    const trimmed = line.trim();
-    if (trimmed && !trimmed.startsWith('#')) {
-      const [key, ...valueParts] = trimmed.split('=');
-      if (key && valueParts.length > 0) {
-        process.env[key.trim()] = valueParts.join('=').trim();
-      }
-    }
-  });
-  console.log('✅ Loaded .env file');
-  console.log(`📊 GitHub Token: ${process.env.GITHUB_TOKEN ? 'Configured (5000 req/hour)' : 'Not configured (60 req/hour)'}`);
-} else {
-  console.log('⚠️  No .env file found. Using default settings (60 req/hour)');
-}
+// 使用 dotenv 加载环境变量
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+// 安全响应头
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"]
+    }
+  },
+  crossOriginEmbedderPolicy: false
+}));
+
+// CORS 配置
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : ['http://localhost:5173', 'http://localhost:3000'];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // 在生产环境要求 origin 头
+    if (!origin && process.env.NODE_ENV === 'production') {
+      callback(new Error('Origin header required in production'));
+      return;
+    }
+
+    // 允许无 origin（开发环境）或白名单中的 origin
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
+// 通用速率限制
+const apiLimiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 分钟
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
+  message: { success: false, error: '请求过于频繁，请稍后再试' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// 昂贵操作速率限制
+const expensiveLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 小时
+  max: 10,
+  message: { success: false, error: '操作过于频繁，请稍后再试' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
@@ -56,9 +95,9 @@ app.get('/api/test', (req, res) => {
   res.json({ success: true, message: 'Test route works' });
 });
 
-app.use('/api', apiRoutes);
+app.use('/api', apiLimiter, apiRoutes);
 app.use('/api/introductions', introductionsRoutes);
-app.use('/api/doc-generator', docGeneratorRoutes);
+app.use('/api/doc-generator', expensiveLimiter, docGeneratorRoutes);
 app.use('/api/project-status', projectStatusRoutes);
 
 // Fallback route for SPA - handle all other routes
@@ -79,9 +118,18 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, error: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on http://localhost:${PORT}`);
   scheduler.start();
+});
+
+// 优雅关闭
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully...');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 });
 
 module.exports = app;

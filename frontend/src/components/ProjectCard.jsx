@@ -1,7 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { formatStarCount, getLastUpdatedDate, truncateDescription, getTechStackSummary, getHighlightsList } from '../utils/introFormatter';
 import axios from 'axios';
-import { cardHover, cardHoverOut, pulse } from '../utils/animations';
 import Notification from './Notification';
 import { useLog } from '../contexts/LogContext';
 
@@ -10,8 +9,6 @@ function ProjectCard({ project, index = 0 }) {
   const [reportStatus, setReportStatus] = useState(null);
   const [imgError, setImgError] = useState(false);
   const [notification, setNotification] = useState(null);
-  const cardRef = useRef(null);
-  const buttonRef = useRef(null);
   const { addLog } = useLog();
 
   const intro = project.introduction;
@@ -31,11 +28,6 @@ function ProjectCard({ project, index = 0 }) {
       setReportStatus('生成中...');
 
       addLog('info', `开始生成报告: ${projectName}`);
-
-      // 按钮点击动画
-      if (buttonRef.current) {
-        pulse(buttonRef.current);
-      }
 
       const response = await axios.post('/api/reports/generate', {
         author: project.owner || project.author,
@@ -72,29 +64,9 @@ function ProjectCard({ project, index = 0 }) {
     }
   };
 
-  // 卡片悬停效果
-  const handleMouseEnter = () => {
-    if (cardRef.current) {
-      cardHover(cardRef.current);
-    }
-  };
-
-  const handleMouseLeave = () => {
-    if (cardRef.current) {
-      cardHoverOut(cardRef.current);
-    }
-  };
-
   return (
     <article
-      ref={cardRef}
       className="project-card"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      style={{
-        opacity: 0,
-        transform: 'translateY(20px)'
-      }}
     >
       <div className="project-header">
         {!imgError ? (
@@ -163,7 +135,6 @@ function ProjectCard({ project, index = 0 }) {
         </div>
         <div className="project-actions">
           <button
-            ref={buttonRef}
             className="generate-report-btn"
             onClick={() => handleGenerateReport(project)}
             title="生成项目深度报告"

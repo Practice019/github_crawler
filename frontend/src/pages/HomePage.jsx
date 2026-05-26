@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getTrendingWithIntros } from '../services/api';
 import ProjectCard from '../components/ProjectCard';
 import SearchFilter from '../components/SearchFilter';
 import { LoadingState, ErrorState, EmptyState } from '../components/StateDisplay';
 import { SkeletonGrid } from '../components/SkeletonCard';
 import Notification from '../components/Notification';
-import { staggerFadeIn, fadeIn } from '../utils/animations';
 import { useLog } from '../contexts/LogContext';
 import {
   downloadSingleProject,
@@ -31,7 +30,6 @@ function HomePage() {
   const [downloading, setDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0 });
   const [updating, setUpdating] = useState(false);
-  const gridRef = useRef(null);
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -71,16 +69,6 @@ function HomePage() {
         return 0;
       });
   }, [projects, searchQuery, sortBy]);
-
-  // 当项目加载完成后，添加交错动画
-  useEffect(() => {
-    if (!loading && !error && filteredProjects.length > 0 && gridRef.current) {
-      const cards = gridRef.current.querySelectorAll('.project-card');
-      if (cards.length > 0) {
-        staggerFadeIn(Array.from(cards));
-      }
-    }
-  }, [loading, error, filteredProjects.length]);
 
   const handleRetry = () => {
     fetchProjects();
@@ -252,7 +240,7 @@ function HomePage() {
       )}
 
       {!loading && !error && filteredProjects.length > 0 && (
-        <div ref={gridRef} className="project-grid">
+        <div className="project-grid">
           {filteredProjects.map((project, index) => (
             <ProjectCard key={project.id || project.name} project={project} index={index} />
           ))}
