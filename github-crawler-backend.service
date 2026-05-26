@@ -1,0 +1,23 @@
+[Unit]
+Description=GitHub Crawler Backend Service
+After=network.target
+
+[Service]
+Type=simple
+User=admin
+WorkingDirectory=/home/admin/github_crawler/server
+ExecStart=/usr/bin/npm run dev
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/admin/github_crawler/logs/backend.log
+StandardError=append:/home/admin/github_crawler/logs/backend-error.log
+
+# 环境变量
+Environment=NODE_ENV=development
+Environment=PORT=3000
+
+# 资源限制
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
