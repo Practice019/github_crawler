@@ -8,3 +8,15 @@ introductions*/
 introductions_end/
 introductions/
 reports/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+
+# Git credentials (虽然在家目录，但提醒不要提交)
+.git-credentials
+
+# 测试文件
+test_*.js
