@@ -79,35 +79,6 @@ const expensiveLimiter = rateLimit({
   legacyHeaders: false
 });
 
-// 文档生成器严格速率限制
-const docGeneratorLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 小时
-  max: 5, // 每小时最多 5 次生成
-  message: { success: false, error: '文档生成过于频繁，每小时最多 5 次' },
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: false,
-  skipFailedRequests: false
-});
-
-// 设置接口速率限制
-const settingsLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 分钟
-  max: 20, // 每 15 分钟最多 20 次请求
-  message: { success: false, error: '设置更新过于频繁，请稍后再试' },
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
-// 连接测试速率限制
-const testConnectionLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 小时
-  max: 10, // 每小时最多 10 次测试
-  message: { success: false, error: '连接测试过于频繁，请稍后再试' },
-  standardHeaders: true,
-  legacyHeaders: false
-});
-
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
@@ -134,11 +105,9 @@ app.get('/api/test', (req, res) => {
 
 app.use('/api', apiLimiter, apiRoutes);
 app.use('/api/introductions', introductionsRoutes);
-app.use('/api/doc-generator', docGeneratorLimiter, docGeneratorRoutes);
+app.use('/api/doc-generator', docGeneratorRoutes);
 app.use('/api/project-status', projectStatusRoutes);
-app.use('/api/settings/doc-generator', settingsLimiter, requireAuth);
-app.use('/api/settings/test-connection', testConnectionLimiter, requireAuth);
-app.use('/api/settings', settingsLimiter, requireAuth, settingsRoutes);
+app.use('/api/settings', requireAuth, settingsRoutes);
 
 // Fallback route for SPA - handle all other routes
 app.use((req, res, next) => {
