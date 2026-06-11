@@ -29,6 +29,44 @@
   color: #6b7280;
 }
 
+.auth-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 500px;
+}
+
+.auth-box {
+  background: white;
+  padding: 2.5rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  max-width: 450px;
+  width: 100%;
+}
+
+.auth-box h2 {
+  font-size: 1.75rem;
+  margin-bottom: 0.5rem;
+  color: #1f2937;
+  text-align: center;
+}
+
+.auth-box > p {
+  text-align: center;
+  color: #6b7280;
+  margin-bottom: 2rem;
+}
+
+.auth-box .form-group {
+  margin-bottom: 1.5rem;
+}
+
+.auth-box .btn {
+  width: 100%;
+  margin-top: 1rem;
+}
+
 .loading-spinner {
   width: 40px;
   height: 40px;

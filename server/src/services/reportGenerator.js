@@ -13,6 +13,28 @@ const MAX_WAIT_TIME = 5000;
 const REQUEST_TIMEOUT = 30000;
 
 /**
+ * 清理错误对象中的敏感信息
+ * @param {Error} error - 错误对象
+ * @returns {Object} - 清理后的错误信息
+ */
+function sanitizeError(error) {
+  // 移除可能包含敏感信息的字段
+  if (error.config) {
+    delete error.config.headers;
+    delete error.config.data;
+  }
+  if (error.request) {
+    delete error.request._header;
+    delete error.request._headers;
+  }
+  return {
+    message: error.message,
+    code: error.code,
+    status: error.response?.status
+  };
+}
+
+/**
  * 动态读取 GitHub Token（不依赖 process.env 缓存）
  * @returns {String|null} - GitHub Token
  */
@@ -41,7 +63,21 @@ async function getGithubToken() {
  * @returns {String} - 清理后的文件名
  */
 function sanitizeFilename(name) {
-  return name.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 200);
+  if (!name || typeof name !== 'string') {
+    throw new Error('Invalid filename');
+  }
+
+  const sanitized = name
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .replace(/_{2,}/g, '_')  // 折叠多个下划线
+    .replace(/^[._-]+/, '')  // 移除开头的点、下划线、横线
+    .substring(0, 100);      // 限制长度为 100
+
+  if (!sanitized || sanitized.length === 0) {
+    throw new Error('Filename becomes empty after sanitization');
+  }
+
+  return sanitized;
 }
 
 /**
@@ -228,16 +264,37 @@ async function downloadAndSaveReadme(repo, skipIfExists = false) {
   // 清理文件名以防止路径遍历
   const sanitizedAuthor = sanitizeFilename(repo.author);
   const sanitizedName = sanitizeFilename(repo.name);
-  const filename = `${sanitizedAuthor}_${sanitizedName}.md`;
+
+  // 限制总文件名长度
+  let filename = `${sanitizedAuthor}_${sanitizedName}.md`;
+  if (filename.length > 200) {
+    // 如果太长，使用哈希
+    const crypto = require('crypto');
+    const hash = crypto.createHash('sha256')
+      .update(`${repo.author}/${repo.name}`)
+      .digest('hex')
+      .substring(0, 16);
+    filename = `${sanitizedAuthor.substring(0, 80)}_${hash}.md`;
+  }
+
+  // 构建完整路径
+  const filePath = path.join(REPORTS_DIR, filename);
+
+  // 验证路径没有遍历到外部
+  const resolvedPath = path.resolve(filePath);
+  const resolvedDir = path.resolve(REPORTS_DIR);
+
+  if (!resolvedPath.startsWith(resolvedDir + path.sep)) {
+    throw new Error('Invalid file path detected');
+  }
 
   // 检查文件是否已存在
   if (skipIfExists && await reportExists(filename)) {
-    const filePath = path.join(REPORTS_DIR, filename);
     return { filePath, skipped: true };
   }
 
   const readme = await downloadReadme(repo);
-  const filePath = await saveReport(filename, readme);
+  await saveReport(filename, readme);
 
   return { filePath, skipped: false };
 }

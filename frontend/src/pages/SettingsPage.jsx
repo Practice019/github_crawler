@@ -7,6 +7,8 @@ function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showGithubToken, setShowGithubToken] = useState(false);
+  const [showAdminToken, setShowAdminToken] = useState(false);
+  const [adminToken, setAdminToken] = useState('');
   const [config, setConfig] = useState({
     apiBase: '',
     apiKey: '',
@@ -22,9 +24,19 @@ function SettingsPage() {
   }, []);
 
   const loadConfig = async () => {
+    if (!adminToken) {
+      showMessage('error', '请先输入管理员令牌');
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
-      const response = await axios.get('/api/settings/doc-generator');
+      const response = await axios.get('/api/settings/doc-generator', {
+        headers: {
+          Authorization: `Bearer ${adminToken}`
+        }
+      });
 
       if (response.data.success) {
         const data = response.data.config;
@@ -34,8 +46,11 @@ function SettingsPage() {
         showMessage('error', '加载配置失败');
       }
     } catch (error) {
-      console.error('加载配置失败:', error);
-      showMessage('error', `加载配置失败: ${error.message}`);
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        showMessage('error', '认证失败，请检查管理员令牌');
+      } else {
+        showMessage('error', '加载配置失败');
+      }
     } finally {
       setLoading(false);
     }
@@ -43,6 +58,11 @@ function SettingsPage() {
 
   const handleSave = async () => {
     // 验证必填项
+    if (!adminToken) {
+      showMessage('error', '请先输入管理员令牌');
+      return;
+    }
+
     if (!config.apiBase.trim()) {
       showMessage('error', '请输入 API 请求地址');
       return;
@@ -68,6 +88,10 @@ function SettingsPage() {
       const response = await axios.post('/api/settings/doc-generator', {
         ...config,
         protocol: 'openai' // 固定使用 OpenAI 协议
+      }, {
+        headers: {
+          Authorization: `Bearer ${adminToken}`
+        }
       });
 
       if (response.data.success) {
@@ -77,8 +101,11 @@ function SettingsPage() {
         showMessage('error', response.data.error || '保存失败');
       }
     } catch (error) {
-      console.error('保存配置失败:', error);
-      showMessage('error', `保存失败: ${error.response?.data?.error || error.message}`);
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        showMessage('error', '认证失败，请检查管理员令牌');
+      } else {
+        showMessage('error', `保存失败: ${error.response?.data?.error || '网络错误'}`);
+      }
     } finally {
       setSaving(false);
     }
@@ -92,6 +119,11 @@ function SettingsPage() {
   };
 
   const handleTestConnection = async () => {
+    if (!adminToken) {
+      showMessage('error', '请先输入管理员令牌');
+      return;
+    }
+
     if (!config.apiBase.trim() || !config.apiKey.trim()) {
       showMessage('error', '请先填写 API 地址和 Key');
       return;
@@ -106,6 +138,10 @@ function SettingsPage() {
         apiKey: config.apiKey,
         model: config.model,
         protocol: 'openai' // 固定使用 OpenAI 协议
+      }, {
+        headers: {
+          Authorization: `Bearer ${adminToken}`
+        }
       });
 
       if (response.data.success) {
@@ -114,8 +150,11 @@ function SettingsPage() {
         showMessage('error', `连接测试失败: ${response.data.error}`);
       }
     } catch (error) {
-      console.error('测试连接失败:', error);
-      showMessage('error', `连接测试失败: ${error.response?.data?.error || error.message}`);
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        showMessage('error', '认证失败，请检查管理员令牌');
+      } else {
+        showMessage('error', `连接测试失败: ${error.response?.data?.error || '网络错误'}`);
+      }
     } finally {
       setSaving(false);
     }
@@ -136,10 +175,62 @@ function SettingsPage() {
   if (loading) {
     return (
       <div className="settings-page">
-        <div className="loading-container">
-          <div className="loading-spinner"></div>
-          <p>加载配置中...</p>
-        </div>
+        {!adminToken ? (
+          <div className="auth-container">
+            <div className="auth-box">
+              <h2>🔒 管理员认证</h2>
+              <p>此页面需要管理员权限访问</p>
+              <div className="form-group">
+                <label htmlFor="adminToken">管理员令牌</label>
+                <div className="password-input-wrapper">
+                  <input
+                    id="adminToken"
+                    type={showAdminToken ? 'text' : 'password'}
+                    className="form-input"
+                    placeholder="请输入管理员令牌"
+                    value={adminToken}
+                    onChange={(e) => setAdminToken(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        loadConfig();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="toggle-password-btn"
+                    onClick={() => setShowAdminToken(!showAdminToken)}
+                  >
+                    {showAdminToken ? '🙈' : '👁️'}
+                  </button>
+                </div>
+                <p className="form-hint">
+                  令牌位于服务器 .env 文件的 ADMIN_TOKEN 变量中
+                </p>
+              </div>
+              <button
+                className="btn btn-primary"
+                onClick={loadConfig}
+                disabled={!adminToken}
+              >
+                验证并加载配置
+              </button>
+              {message.text && (
+                <div className={`message message-${message.type}`}>
+                  {message.type === 'success' && '✅ '}
+                  {message.type === 'error' && '❌ '}
+                  {message.type === 'info' && 'ℹ️ '}
+                  {message.text}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="loading-container">
+            <div className="loading-spinner"></div>
+            <p>加载配置中...</p>
+          </div>
+        )}
       </div>
     );
   }

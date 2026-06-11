@@ -4,6 +4,23 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
+/**
+ * 清理日志中的敏感信息
+ * @param {String} message - 原始日志消息
+ * @returns {String} - 清理后的日志
+ */
+function sanitizeLog(message) {
+  return message
+    .replace(/ghp_[a-zA-Z0-9]{36}/g, 'ghp_***')
+    .replace(/github_pat_[a-zA-Z0-9_]{82}/g, 'github_pat_***')
+    .replace(/sk-[a-zA-Z0-9]{48,}/g, 'sk-***')
+    .replace(/sk-proj-[a-zA-Z0-9_-]{100,}/g, 'sk-proj-***')
+    .replace(/Bearer\s+[a-zA-Z0-9._-]+/gi, 'Bearer ***')
+    .replace(/token["\s:=]+[a-zA-Z0-9._-]+/gi, 'token ***')
+    .replace(/password["\s:=]+[^\s"]+/gi, 'password ***')
+    .replace(/api[_-]?key["\s:=]+[^\s"]+/gi, 'api_key ***');
+}
+
 // 循环缓冲区类
 class CircularBuffer {
   constructor(maxSize = 1000) {
@@ -33,6 +50,7 @@ class ProcessManager {
     this.currentProcess = null;
     this.logs = new CircularBuffer(1000);
     this.clients = new Set();
+    this.maxClients = 100; // 最大连接数
     this.cleanupInterval = setInterval(() => this.cleanup(), 30000); // 每30秒清理一次
   }
 
@@ -69,7 +87,20 @@ class ProcessManager {
   }
 
   addClient(client) {
+    // 检查连接数限制
+    if (this.clients.size >= this.maxClients) {
+      return false;
+    }
+
+    // 设置连接超时（5 分钟）
+    client.setTimeout(300000);
+    client.on('timeout', () => {
+      client.end();
+      this.clients.delete(client);
+    });
+
     this.clients.add(client);
+    return true;
   }
 
   removeClient(client) {
@@ -147,22 +178,41 @@ router.post('/run', (req, res) => {
     console.log(`Starting Python script: ${pythonScript}`);
     console.log(`Working directory: ${workingDir}`);
 
-    // 启动 Python 进程
+    // 启动 Python 进程（限制环境变量，添加超时）
     const childProcess = spawn('python3.8', [pythonScript], {
       cwd: workingDir,
       env: {
-        ...process.env,
+        // 仅传递必要的环境变量
+        PATH: process.env.PATH,
+        HOME: process.env.HOME,
         PYTHONIOENCODING: 'utf-8',
-        PYTHONUNBUFFERED: '1'
-      }
+        PYTHONUNBUFFERED: '1',
+        LANG: process.env.LANG || 'en_US.UTF-8'
+      },
+      shell: false, // 禁用 shell
+      timeout: 3600000 // 1 小时超时
     });
 
     processManager.setProcess(childProcess);
 
+    // 添加执行超时保护
+    const executionTimeout = setTimeout(() => {
+      if (processManager.isRunning()) {
+        console.warn('Process exceeded timeout, killing...');
+        processManager.killProcess('SIGKILL');
+        processManager.addLog({
+          type: 'error',
+          message: '进程超时（超过 1 小时），已被终止',
+          timestamp: new Date().toISOString()
+        });
+      }
+    }, 3600000); // 1 小时
+
     // 监听标准输出
     childProcess.stdout.setEncoding('utf8');
     childProcess.stdout.on('data', (data) => {
-      const message = data.toString();
+      const rawMessage = data.toString();
+      const message = sanitizeLog(rawMessage);
       const timestamp = new Date().toISOString();
       console.log(`[Python stdout]: ${message}`);
 
@@ -172,7 +222,8 @@ router.post('/run', (req, res) => {
     // 监听标准错误
     childProcess.stderr.setEncoding('utf8');
     childProcess.stderr.on('data', (data) => {
-      const message = data.toString();
+      const rawMessage = data.toString();
+      const message = sanitizeLog(rawMessage);
       const timestamp = new Date().toISOString();
       console.error(`[Python stderr]: ${message}`);
 
@@ -181,6 +232,7 @@ router.post('/run', (req, res) => {
 
     // 监听进程退出
     childProcess.on('close', (code) => {
+      clearTimeout(executionTimeout); // 清理超时定时器
       const message = `进程退出，退出码: ${code}`;
       const timestamp = new Date().toISOString();
       console.log(message);
@@ -191,6 +243,7 @@ router.post('/run', (req, res) => {
 
     // 监听错误
     childProcess.on('error', (error) => {
+      clearTimeout(executionTimeout); // 清理超时定时器
       const message = `启动进程失败: ${error.message}`;
       const timestamp = new Date().toISOString();
       console.error(message);
@@ -218,15 +271,22 @@ router.get('/logs', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+
+  // 检查连接数限制
+  if (!processManager.addClient(res)) {
+    return res.status(429).json({
+      success: false,
+      error: '连接数过多，请稍后再试'
+    });
+  }
 
   // 发送历史日志
   const logs = processManager.getLogs();
   logs.forEach(log => {
     res.write(`data: ${JSON.stringify(log)}\n\n`);
   });
-
-  // 添加客户端到管理器
-  processManager.addClient(res);
 
   // 客户端断开连接时移除
   req.on('close', () => {
