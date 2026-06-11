@@ -17,16 +17,13 @@ function SettingsPage() {
   });
   const [originalConfig, setOriginalConfig] = useState(null);
   const [message, setMessage] = useState({ type: '', text: '' });
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // 加载当前配置
-  useEffect(() => {
-    loadConfig();
-  }, []);
+  // 不要在 useEffect 中自动加载配置
 
   const loadConfig = async () => {
     if (!adminToken) {
       showMessage('error', '请先输入管理员令牌');
-      setLoading(false);
       return;
     }
 
@@ -42,6 +39,8 @@ function SettingsPage() {
         const data = response.data.config;
         setConfig(data);
         setOriginalConfig(data);
+        setIsAuthenticated(true);
+        showMessage('success', '配置加载成功');
       } else {
         showMessage('error', '加载配置失败');
       }
@@ -175,62 +174,69 @@ function SettingsPage() {
   if (loading) {
     return (
       <div className="settings-page">
-        {!adminToken ? (
-          <div className="auth-container">
-            <div className="auth-box">
-              <h2>🔒 管理员认证</h2>
-              <p>此页面需要管理员权限访问</p>
-              <div className="form-group">
-                <label htmlFor="adminToken">管理员令牌</label>
-                <div className="password-input-wrapper">
-                  <input
-                    id="adminToken"
-                    type={showAdminToken ? 'text' : 'password'}
-                    className="form-input"
-                    placeholder="请输入管理员令牌"
-                    value={adminToken}
-                    onChange={(e) => setAdminToken(e.target.value)}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        loadConfig();
-                      }
-                    }}
-                  />
-                  <button
-                    type="button"
-                    className="toggle-password-btn"
-                    onClick={() => setShowAdminToken(!showAdminToken)}
-                  >
-                    {showAdminToken ? '🙈' : '👁️'}
-                  </button>
-                </div>
-                <p className="form-hint">
-                  令牌位于服务器 .env 文件的 ADMIN_TOKEN 变量中
-                </p>
+        <div className="loading-container">
+          <div className="loading-spinner"></div>
+          <p>加载配置中...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 未认证时显示认证界面
+  if (!isAuthenticated) {
+    return (
+      <div className="settings-page">
+        <div className="auth-container">
+          <div className="auth-box">
+            <h2>🔒 管理员认证</h2>
+            <p>此页面需要管理员权限访问</p>
+
+            {message.text && (
+              <div className={`message message-${message.type}`}>
+                {message.type === 'success' && '✅ '}
+                {message.type === 'error' && '❌ '}
+                {message.type === 'info' && 'ℹ️ '}
+                {message.text}
               </div>
-              <button
-                className="btn btn-primary"
-                onClick={loadConfig}
-                disabled={!adminToken}
-              >
-                验证并加载配置
-              </button>
-              {message.text && (
-                <div className={`message message-${message.type}`}>
-                  {message.type === 'success' && '✅ '}
-                  {message.type === 'error' && '❌ '}
-                  {message.type === 'info' && 'ℹ️ '}
-                  {message.text}
-                </div>
-              )}
+            )}
+
+            <div className="form-group">
+              <label htmlFor="adminToken">管理员令牌</label>
+              <div className="password-input-wrapper">
+                <input
+                  id="adminToken"
+                  type={showAdminToken ? 'text' : 'password'}
+                  className="form-input"
+                  placeholder="请输入管理员令牌"
+                  value={adminToken}
+                  onChange={(e) => setAdminToken(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      loadConfig();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="toggle-password-btn"
+                  onClick={() => setShowAdminToken(!showAdminToken)}
+                >
+                  {showAdminToken ? '🙈' : '👁️'}
+                </button>
+              </div>
+              <p className="form-hint">
+                令牌位于服务器 .env 文件的 ADMIN_TOKEN 变量中
+              </p>
             </div>
+            <button
+              className="btn btn-primary"
+              onClick={loadConfig}
+              disabled={!adminToken}
+            >
+              验证并加载配置
+            </button>
           </div>
-        ) : (
-          <div className="loading-container">
-            <div className="loading-spinner"></div>
-            <p>加载配置中...</p>
-          </div>
-        )}
+        </div>
       </div>
     );
   }
