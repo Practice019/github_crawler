@@ -182,18 +182,19 @@ function DocGeneratorPage() {
 
       const projects = trendingResponse.data.data || [];
       setDownloadProgress({ current: 0, total: projects.length });
-      addLog('info', `找到 ${projects.length} 个项目，开始下载...`);
+      addLog('info', `找到 ${projects.length} 个项目，开始并发下载...`);
 
       let successCount = 0;
       let failCount = 0;
       let skippedCount = 0;
 
-      for (let i = 0; i < projects.length; i++) {
-        const project = projects[i];
+      // 并发控制：每次同时处理20个
+      const CONCURRENT_LIMIT = 20;
+      const processProject = async (project, index) => {
         const projectName = `${project.author || project.owner}/${project.name}`;
 
         try {
-          addLog('info', `[${i + 1}/${projects.length}] 下载: ${projectName}`);
+          addLog('info', `[${index + 1}/${projects.length}] 下载: ${projectName}`);
 
           const response = await axios.post('/api/reports/generate', {
             author: project.author || project.owner,
@@ -205,14 +206,11 @@ function DocGeneratorPage() {
             if (response.data.skipped) {
               skippedCount++;
               addLog('info', `  ⏭️ 已跳过（文件已存在）`);
-              // 跳过的项目不需要延迟
             } else {
               successCount++;
               addLog('success', `  ✅ 下载成功`);
-              // 只有成功下载的才需要延迟，避免速率限制
-              if (i < projects.length - 1) {
-                await new Promise(resolve => setTimeout(resolve, 500));
-              }
+              // 成功下载后延迟，避免 GitHub API 速率限制
+              await new Promise(resolve => setTimeout(resolve, 1000));
             }
           } else {
             failCount++;
@@ -223,7 +221,16 @@ function DocGeneratorPage() {
           addLog('error', `  ❌ 下载失败: ${err.response?.data?.error || err.message}`);
         }
 
-        setDownloadProgress({ current: i + 1, total: projects.length });
+        setDownloadProgress(prev => ({ ...prev, current: prev.current + 1 }));
+      };
+
+      // 分批并发处理
+      for (let i = 0; i < projects.length; i += CONCURRENT_LIMIT) {
+        const batch = projects.slice(i, i + CONCURRENT_LIMIT);
+        const batchPromises = batch.map((project, batchIndex) =>
+          processProject(project, i + batchIndex)
+        );
+        await Promise.all(batchPromises);
       }
 
       addLog('success', `下载完成！成功: ${successCount}, 跳过: ${skippedCount}, 失败: ${failCount}`);

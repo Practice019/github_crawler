@@ -11,6 +11,7 @@ const HomePage = lazy(() => import('./pages/HomePage'));
 const IntroductionsPage = lazy(() => import('./pages/IntroductionsPage'));
 const IntroductionDetailPage = lazy(() => import('./pages/IntroductionDetailPage'));
 const DocGeneratorPage = lazy(() => import('./pages/DocGeneratorPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 
 // 加载中组件
 function LoadingFallback() {
@@ -45,6 +46,9 @@ function App() {
     if (location.pathname === '/doc-generator') {
       return null; // 文档生成器页面自己有标题
     }
+    if (location.pathname === '/settings') {
+      return null; // 设置页面自己有标题
+    }
     // 详情页不显示标题
     return null;
   };
@@ -77,6 +81,7 @@ function App() {
               <Route path="/introductions" element={<IntroductionsPage />} />
               <Route path="/introductions/:projectId" element={<IntroductionDetailPage />} />
               <Route path="/doc-generator" element={<DocGeneratorPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
             </Routes>
           </Suspense>
         </main>

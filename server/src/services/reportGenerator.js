@@ -4,12 +4,36 @@ const axios = require('axios');
 const { addProxyToConfig } = require('../utils/proxyConfig');
 
 const REPORTS_DIR = path.join(__dirname, '..', '..', '..', 'reports');
+const ENV_FILE_PATH = path.join(__dirname, '..', '..', '..', '.env');
 
 // 常量定义
 const MAX_RETRIES = 3;
 const INITIAL_WAIT_TIME = 1000;
 const MAX_WAIT_TIME = 5000;
 const REQUEST_TIMEOUT = 30000;
+
+/**
+ * 动态读取 GitHub Token（不依赖 process.env 缓存）
+ * @returns {String|null} - GitHub Token
+ */
+async function getGithubToken() {
+  try {
+    const content = await fs.readFile(ENV_FILE_PATH, 'utf-8');
+    const lines = content.split('\n');
+
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (trimmedLine.startsWith('GITHUB_TOKEN=')) {
+        const token = trimmedLine.substring('GITHUB_TOKEN='.length).trim();
+        return token || null;
+      }
+    }
+    return null;
+  } catch (error) {
+    console.warn('无法读取 .env 文件获取 GITHUB_TOKEN:', error.message);
+    return process.env.GITHUB_TOKEN || null;
+  }
+}
 
 /**
  * 清理文件名，移除特殊字符
@@ -34,16 +58,17 @@ function parseRateLimitReset(rateLimitReset) {
 
 /**
  * 构建请求头
+ * @param {String} githubToken - GitHub Token
  * @returns {Object} - 请求头对象
  */
-function buildHeaders() {
+function buildHeaders(githubToken) {
   const headers = {
     'Accept': 'application/vnd.github.v3.raw',
     'User-Agent': 'GitHub-Trending-App',
   };
 
-  if (process.env.GITHUB_TOKEN) {
-    headers['Authorization'] = `token ${process.env.GITHUB_TOKEN}`;
+  if (githubToken) {
+    headers['Authorization'] = `token ${githubToken}`;
   }
 
   return headers;
@@ -103,10 +128,11 @@ function validateReadme(readme) {
 /**
  * 从 GitHub 获取 README
  * @param {Object} repo - 项目信息
+ * @param {String} githubToken - GitHub Token
  * @returns {String} - README 内容
  */
-async function fetchReadmeFromGitHub(repo) {
-  const headers = buildHeaders();
+async function fetchReadmeFromGitHub(repo, githubToken) {
+  const headers = buildHeaders(githubToken);
   const response = await axios.get(
     `https://api.github.com/repos/${repo.author}/${repo.name}/readme`,
     addProxyToConfig({
@@ -150,10 +176,11 @@ async function waitBeforeRetry(attempt, repo) {
  */
 async function downloadReadme(repo) {
   let lastError;
+  const githubToken = await getGithubToken();
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      return await fetchReadmeFromGitHub(repo);
+      return await fetchReadmeFromGitHub(repo, githubToken);
     } catch (error) {
       lastError = error;
 

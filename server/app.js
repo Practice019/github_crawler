@@ -7,6 +7,7 @@ const apiRoutes = require('./src/routes/api');
 const introductionsRoutes = require('./src/routes/introductions');
 const docGeneratorRoutes = require('./src/routes/docGenerator');
 const projectStatusRoutes = require('./src/routes/projectStatus');
+const settingsRoutes = require('./src/routes/settings');
 const scheduler = require('./src/services/scheduler');
 const { performanceMonitor, memoryMonitor } = require('./src/middleware/performanceMonitor');
 
@@ -103,8 +104,9 @@ app.get('/api/test', (req, res) => {
 
 app.use('/api', apiLimiter, apiRoutes);
 app.use('/api/introductions', introductionsRoutes);
-app.use('/api/doc-generator', expensiveLimiter, docGeneratorRoutes);
+app.use('/api/doc-generator', docGeneratorRoutes); // 移除速率限制
 app.use('/api/project-status', projectStatusRoutes);
+app.use('/api/settings', settingsRoutes); // 设置页面不限制
 
 // Fallback route for SPA - handle all other routes
 app.use((req, res, next) => {
