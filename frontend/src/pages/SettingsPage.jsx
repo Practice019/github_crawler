@@ -3,7 +3,7 @@ import axios from 'axios';
 import './SettingsPage.css';
 
 function SettingsPage() {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showGithubToken, setShowGithubToken] = useState(false);
