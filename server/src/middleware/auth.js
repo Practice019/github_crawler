@@ -32,13 +32,8 @@ function requireAuth(req, res, next) {
 
   const token = authHeader.substring(7); // 移除 "Bearer " 前缀
 
-  // 使用时间安全的比较防止时序攻击
-  const isValid = crypto.timingSafeEqual(
-    Buffer.from(token),
-    Buffer.from(adminToken)
-  );
-
-  if (!isValid) {
+  // 直接比较令牌
+  if (token !== adminToken) {
     return res.status(403).json({
       success: false,
       error: '认证令牌无效'
